@@ -4,9 +4,10 @@ on:
   pull_request:
   push:
     branches: # Specify your branches here
-      - main # The 'main' branch
-      - 'releases/*' # The release branches
-      - 'master'
+      - test # The 'test' branch -- THIS IS TO NOT RUN THIS WORKFLOW ON GITHUB
+#      - main # The 'main' branch
+#      - 'releases/*' # The release branches
+#      - 'master' # The 'master' branch
 
 jobs:
   qodana:
