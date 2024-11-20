@@ -49,7 +49,6 @@ class SearchScreen : BaseFragment<SearchViewModel, FragmentSearchScreenBinding>(
 			loader.visibility = View.GONE
 			noResultContainer.visibility = View.GONE
 			keyboardA.requestFocus()
-			viewModel.search.value = DEFAULT.EMPTY_STRING
 			viewModel.search.value?.let { searchString ->
 				searchInput.setText(searchString.ifBlank { DEFAULT.EMPTY_STRING })
 			}

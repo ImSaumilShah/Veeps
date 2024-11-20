@@ -197,6 +197,7 @@ class SignInScreen : BaseActivity<SignInViewModel, ActivitySignInScreenBinding>(
 					}
 
 					LOADING -> {
+						Logger.doNothing()
 					}
 				}                /* TODO: Handle 401 Unauthorized 422 Unprocessable Entity */
 			}

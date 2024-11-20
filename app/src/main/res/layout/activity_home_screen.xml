@@ -70,6 +70,13 @@
             app:layout_constraintStart_toStartOf="@+id/start"
             app:layout_constraintTop_toBottomOf="@id/top" />
 
+        <!-- Foreground Overlay -->
+        <View
+            android:id="@+id/navigation_menu_background"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="@drawable/navigation_menu_background" />
+
         <!-- Navigation Menu Container Background Blur -->
         <eightbitlab.com.blurview.BlurView
             android:id="@+id/navigation_menu_container"
@@ -79,14 +86,6 @@
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toTopOf="parent">
-
-            <!-- Foreground Overlay -->
-            <View
-                android:id="@+id/navigation_menu_background"
-                android:layout_width="match_parent"
-                android:layout_height="match_parent"
-                android:background="@drawable/navigation_menu_background"
-                android:elevation="8dp" />
 
             <!-- Navigation Menu -->
             <com.veeps.app.widget.navigationMenu.NavigationMenu

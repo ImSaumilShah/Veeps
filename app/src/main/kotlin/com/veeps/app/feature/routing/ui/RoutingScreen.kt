@@ -37,41 +37,50 @@ class RoutingScreen : Activity() {
 		super.onCreate(savedInstanceState)
 		binding = ActivityRoutingScreenBinding.inflate(layoutInflater)
 		setContentView(binding.root)
-
-		binding.logo.addValueCallback(
-			KeyPath("**"), LottieProperty.COLOR_FILTER
-		) { _ ->
-			PorterDuffColorFilter(
-				Color.WHITE, PorterDuff.Mode.SRC_ATOP
-			)
-		}
-		binding.logo.repeatCount = 0
-		binding.logo.addLottieOnCompositionLoadedListener {
-			if (this::handler.isInitialized && this::runnable.isInitialized) handler.postDelayed(
-				runnable, 2000
-			)
-		}
-
-		binding.logo.setFailureListener {
+		if (AppPreferences.get(
+				AppConstants.isUserAuthenticated, false
+			) && !AppPreferences.get(
+				AppConstants.authenticatedUserToken, ""
+			).isNullOrEmpty()
+		) {
 			goToScreen()
-		}
-		binding.logo.addAnimatorListener(object : AnimatorListener {
-			override fun onAnimationStart(animator: Animator) {}
+		} else {
 
-			override fun onAnimationEnd(animator: Animator) {
-				goToScreen()
+			binding.logo.addValueCallback(
+				KeyPath("**"), LottieProperty.COLOR_FILTER
+			) { _ ->
+				PorterDuffColorFilter(
+					Color.WHITE, PorterDuff.Mode.SRC_ATOP
+				)
+			}
+			binding.logo.repeatCount = 0
+			binding.logo.addLottieOnCompositionLoadedListener {
+				if (this::handler.isInitialized && this::runnable.isInitialized) handler.postDelayed(
+					runnable, 2000
+				)
 			}
 
-			override fun onAnimationCancel(animator: Animator) {}
+			binding.logo.setFailureListener {
+				goToScreen()
+			}
+			binding.logo.addAnimatorListener(object : AnimatorListener {
+				override fun onAnimationStart(animator: Animator) {}
 
-			override fun onAnimationRepeat(animator: Animator) {}
+				override fun onAnimationEnd(animator: Animator) {
+					goToScreen()
+				}
 
-		})
-		handler = Handler(Looper.getMainLooper())
-		runnable = Runnable {
+				override fun onAnimationCancel(animator: Animator) {}
 
+				override fun onAnimationRepeat(animator: Animator) {}
+
+			})
+			handler = Handler(Looper.getMainLooper())
+			runnable = Runnable {
+
+			}
+			binding.logo.postDelayed({ binding.logo.playAnimation() }, 100)
 		}
-		binding.logo.postDelayed({ binding.logo.playAnimation() }, 100)
 	}
 
 	private fun goToScreen() {

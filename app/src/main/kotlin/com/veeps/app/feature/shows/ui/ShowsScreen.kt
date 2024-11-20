@@ -288,6 +288,12 @@ class ShowsScreen : BaseFragment<ShowsViewModel, FragmentShowsScreenBinding>() {
 	}
 
 	private fun notifyAppEvents() {
+		homeViewModel.shouldRefresh.observe(viewLifecycleOwner) { shouldRefresh ->
+			if (shouldRefresh) {
+				fetchAllWatchListEvents()
+				homeViewModel.shouldRefresh.postValue(false)
+			}
+		}
 		homeViewModel.focusItem.observe(viewLifecycleOwner) { isTrue ->
 			if (isTrue) {
 				fetchAllWatchListEvents()

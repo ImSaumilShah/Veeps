@@ -1,6 +1,7 @@
 package com.veeps.app.data.network
 
 import com.google.gson.GsonBuilder
+import com.google.gson.Strictness
 import com.veeps.app.BuildConfig
 import com.veeps.app.data.common.BaseResponseGeneric
 import com.veeps.app.extension.isAppConnected
@@ -66,17 +67,15 @@ object APIUtil {
 				var request = chain.request()
 				val originalHttpUrl = request.url
 				val headerToken =
-					if (originalHttpUrl.encodedPath == APIConstants.fetchUserStats || originalHttpUrl.encodedPath == APIConstants.addStats) AppPreferences.get(
-						AppConstants.generatedJWT,
-						"GeneratedJWT"
+					if (originalHttpUrl.encodedPath == APIConstants.FETCH_USER_STATS || originalHttpUrl.encodedPath == APIConstants.ADD_STATS) AppPreferences.get(
+						AppConstants.generatedJWT, "GeneratedJWT"
 					) else AppPreferences.get(
-						AppConstants.authenticatedUserToken,
-						"AuthenticatedUserToken"
+						AppConstants.authenticatedUserToken, "AuthenticatedUserToken"
 					)
 				val builder: Request.Builder =
 					request.newBuilder().header("Authorization", "Bearer $headerToken")
 				request = builder.build()
-				if (originalHttpUrl.encodedPath == APIConstants.fetchUserStats || originalHttpUrl.encodedPath == APIConstants.addStats) AppPreferences.remove(
+				if (originalHttpUrl.encodedPath == APIConstants.FETCH_USER_STATS || originalHttpUrl.encodedPath == APIConstants.ADD_STATS) AppPreferences.remove(
 					AppConstants.generatedJWT
 				)
 				chain.proceed(request)
@@ -100,15 +99,15 @@ object APIUtil {
 
 		Retrofit.Builder().baseUrl(APIConstants.BASE_URL)
 			.addConverterFactory(ScalarsConverterFactory.create())
-			.addConverterFactory(GsonConverterFactory.create(GsonBuilder().setLenient().create()))
+			.addConverterFactory(GsonConverterFactory.create(GsonBuilder().setStrictness(Strictness.LENIENT).create()))
 			.client(httpClient).build().create(APIService::class.java)
 	}
 
 	interface APIService {
-		@POST(APIConstants.fetchAuthenticationDetails)
+		@POST(APIConstants.FETCH_AUTHENTICATION_DETAILS)
 		suspend fun fetchAuthenticationDetails(@Query("client_id") clientId: String): Response<SignInData>
 
-		@POST(APIConstants.authenticationPolling)
+		@POST(APIConstants.AUTHENTICATION_POLLING)
 		@FormUrlEncoded
 		suspend fun authenticationPolling(
 			@Field("grant_type") grantType: String,
@@ -117,19 +116,19 @@ object APIUtil {
 			@Field("client_secret") clientSecret: String,
 		): Response<PollingData>
 
-		@GET(APIConstants.fetchUserDetails)
+		@GET(APIConstants.FETCH_USER_DETAILS)
 		suspend fun fetchUserDetails(): Response<BaseResponseGeneric<UserData>>
 
-		@GET(APIConstants.fetchBrowseRails)
+		@GET(APIConstants.FETCH_BROWSE_RAILS)
 		suspend fun fetchBrowseRails(): Response<RailResponse>
 
-		@GET(APIConstants.fetchOnDemandRails)
+		@GET(APIConstants.FETCH_ON_DEMAND_RAILS)
 		suspend fun fetchOnDemandRails(): Response<RailResponse>
 
-		@GET(APIConstants.fetchFeaturedContent)
+		@GET(APIConstants.FETCH_FEATURED_CONTENT)
 		suspend fun fetchFeaturedContent(): Response<RailResponse>
 
-		@GET(APIConstants.fetchContinueWatchingRail)
+		@GET(APIConstants.FETCH_CONTINUE_WATCHING_RAIL)
 		suspend fun fetchContinueWatchingRail(): Response<RailData>
 
 		@GET
@@ -137,64 +136,64 @@ object APIUtil {
 			@Url userStatsAPIURL: String, @Query("e") eventIds: String
 		): Response<UserStatsResponse>
 
-		@GET(APIConstants.fetchUpcomingEvents)
+		@GET(APIConstants.FETCH_UPCOMING_EVENTS)
 		suspend fun fetchUpcomingEvents(): Response<RailData>
 
-		@GET(APIConstants.fetchSearchResult)
+		@GET(APIConstants.FETCH_SEARCH_RESULT)
 		suspend fun fetchSearchResult(@Query("q") search: String): Response<SearchResponse>
 
-		@GET(APIConstants.fetchEntityDetails)
+		@GET(APIConstants.FETCH_ENTITY_DETAILS)
 		suspend fun fetchEntityDetails(
 			@Path("ENTITY") entity: String,
 			@Path("ENTITY_ID") entityId: String,
 		): Response<ArtistResponse>
 
-		@GET(APIConstants.fetchEntityUpcomingEvents)
+		@GET(APIConstants.FETCH_ENTITY_UPCOMING_EVENTS)
 		suspend fun fetchEntityUpcomingEvents(@Query("scope") entityScope: String): Response<RailData>
 
-		@GET(APIConstants.fetchEntityOnDemandEvents)
+		@GET(APIConstants.FETCH_ENTITY_ON_DEMAND_EVENTS)
 		suspend fun fetchEntityOnDemandEvents(@Query("scope") entityScope: String): Response<RailData>
 
-		@GET(APIConstants.fetchEntityPastEvents)
+		@GET(APIConstants.FETCH_ENTITY_PAST_EVENTS)
 		suspend fun fetchEntityPastEvents(@Query("scope") entityScope: String): Response<RailData>
 
-		@GET(APIConstants.fetchAllPurchasedEvents)
+		@GET(APIConstants.FETCH_ALL_PURCHASED_EVENTS)
 		suspend fun fetchAllPurchasedEvents(): Response<RailData>
 
-		@GET(APIConstants.watchListEvents)
+		@GET(APIConstants.WATCH_LIST_EVENTS)
 		suspend fun fetchAllWatchListEvents(): Response<RailData>
 
-		@POST(APIConstants.watchListEvents)
+		@POST(APIConstants.WATCH_LIST_EVENTS)
 		suspend fun addWatchListEvent(@Body hashMap: HashMap<String, Any>): Response<BaseResponseGeneric<Any>>
 
-		@HTTP(method = "DELETE", path = APIConstants.removeWatchListEvents, hasBody = true)
+		@HTTP(method = "DELETE", path = APIConstants.REMOVE_WATCH_LIST_EVENTS, hasBody = true)
 		suspend fun removeWatchListEvent(@Body hashMap: HashMap<String, Any>): Response<BaseResponseGeneric<Any>>
 
-		@GET(APIConstants.fetchEventStreamDetails)
+		@GET(APIConstants.FETCH_EVENT_STREAM_DETAILS)
 		suspend fun fetchEventStreamDetails(@Path("EVENT_ID") entity: String): Response<BaseResponseGeneric<Entities>>
 
-		@GET(APIConstants.fetchEventDetails)
+		@GET(APIConstants.FETCH_EVENT_DETAILS)
 		suspend fun fetchEventDetails(@Path("EVENT_ID") entity: String): Response<BaseResponseGeneric<Entities>>
 
-		@GET(APIConstants.fetchEventProductDetails)
+		@GET(APIConstants.FETCH_EVENT_PRODUCT_DETAILS)
 		suspend fun fetchEventProductDetails(@Path("EVENT_ID") entity: String): Response<ProductsResponse>
 
-		@POST(APIConstants.claimFreeTicketForEvent)
+		@POST(APIConstants.CLAIM_FREE_TICKET_FOR_EVENT)
 		suspend fun claimFreeTicketForEvent(@Path("EVENT_ID") entity: String): Response<BaseResponseGeneric<Any>>
 
-		@DELETE(APIConstants.clearAllReservations)
+		@DELETE(APIConstants.CLEAR_ALL_RESERVATIONS)
 		suspend fun clearAllReservations(): Response<BaseResponseGeneric<Any>>
 
-		@POST(APIConstants.setNewReservation)
+		@POST(APIConstants.SET_NEW_RESERVATION)
 		suspend fun setNewReservation(@Body hashMap: HashMap<String, Any>): Response<BaseResponseGeneric<Reservation>>
 
-		@GET(APIConstants.generateNewOrder)
+		@GET(APIConstants.GENERATE_NEW_ORDER)
 		suspend fun generateNewOrder(): Response<BaseResponseGeneric<OrderGeneration>>
 
-		@POST(APIConstants.createOrder)
+		@POST(APIConstants.CREATE_ORDER)
 		suspend fun createOrder(@Body hashMap: HashMap<String, Any>): Response<BaseResponseGeneric<Any>>
 
-		@POST(APIConstants.fetchCompanions)
+		@POST(APIConstants.FETCH_COMPANIONS)
 		suspend fun fetchCompanions(@Body hashMap: HashMap<String, Any>): Response<BaseResponseGeneric<Companion>>
 
 		@GET
@@ -213,5 +212,16 @@ object APIUtil {
 			@Query("s") userType: String
 		): Response<BaseResponseGeneric<Any>>
 
+		@GET(APIConstants.FETCH_RECOMMENDED_CONTENT)
+		suspend fun fetchRecommendedContent(@Query("scope") scope: String): Response<RailResponse>
+
+		@POST(APIConstants.SUBSCRIPTION_MAPPING)
+		suspend fun subscriptionMapping(@Body hashMap: HashMap<String, Any>): Response<BaseResponseGeneric<Any>>
+
+		@GET(APIConstants.FETCH_GENRE_CONTENT)
+		suspend fun fetchGenreContent(@Query("scope") scope: String): Response<RailResponse>
+
+		@GET(APIConstants.VALIDATE_APP_VERSIONS)
+		suspend fun validateAppVersion(@Query("version") appVersion: String): Response<BaseResponseGeneric<Any>>
 	}
 }

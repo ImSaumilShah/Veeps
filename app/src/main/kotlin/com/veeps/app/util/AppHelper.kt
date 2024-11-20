@@ -4,6 +4,7 @@ import android.os.Bundle
 import androidx.fragment.app.Fragment
 
 interface AppHelper {
+	fun setCarousel(position: Int)
 	fun translateCarouselToTop(needsOnTop: Boolean)
 	fun translateCarouselToBottom(needsOnBottom: Boolean)
 	fun selectNavigationMenu(selectedItem: Int)

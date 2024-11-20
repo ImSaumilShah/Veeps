@@ -4,6 +4,7 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
 
     <uses-feature
         android:name="android.software.leanback"
@@ -85,11 +86,11 @@
         <meta-data
             android:name="io.sentry.traces.user-interaction.enable"
             android:value="true" />
-        <!-- enable screenshot for crashes (could contain sensitive/PII data) -->
 
+        <!-- enable screenshot for crashes (could contain sensitive/PII data) -->
         <meta-data
             android:name="io.sentry.attach-screenshot"
-            android:value="true" />
+            android:value="false" />
 
         <!-- enable view hierarchy for crashes -->
         <meta-data
@@ -131,6 +132,15 @@
             </intent-filter>
         </receiver>
 
+        <!-- bitmovin license key -->
+        <meta-data
+            android:name="BITMOVIN_PLAYER_LICENSE_KEY"
+            android:value="${BitmovinKey}"/>
     </application>
+
+    <queries>
+        <package android:name="com.amazon.sdktestclient" />
+        <package android:name="com.amazon.venezia" />
+    </queries>
 
 </manifest>

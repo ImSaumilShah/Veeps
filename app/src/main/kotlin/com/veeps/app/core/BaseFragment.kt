@@ -101,11 +101,7 @@ abstract class BaseFragment<VM : ViewModel, VB : ViewDataBinding> : Fragment() {
 					}
 				}
 				when (dataResource.tag) {
-					APIConstants.authenticationPolling -> {
-						block.invoke()
-					}
-
-					APIConstants.fetchCompanions, APIConstants.fetchUserStats, APIConstants.fetchEventStreamDetails, APIConstants.fetchEventDetails, APIConstants.fetchEventProductDetails, APIConstants.clearAllReservations, APIConstants.fetchStoryBoard -> {
+					APIConstants.AUTHENTICATION_POLLING, APIConstants.VALIDATE_APP_VERSIONS, APIConstants.FETCH_COMPANIONS, APIConstants.FETCH_USER_STATS, APIConstants.FETCH_EVENT_STREAM_DETAILS, APIConstants.FETCH_EVENT_DETAILS, APIConstants.FETCH_EVENT_PRODUCT_DETAILS, APIConstants.CLEAR_ALL_RESERVATIONS, APIConstants.FETCH_STORY_BOARD, APIConstants.SUBSCRIPTION_MAPPING -> {
 						block.invoke()
 					}
 
@@ -115,7 +111,7 @@ abstract class BaseFragment<VM : ViewModel, VB : ViewDataBinding> : Fragment() {
 						} ?: helper.showErrorOnScreen(
 							dataResource.tag, getString(R.string.unknown_error)
 						)
-						if (dataResource.tag == APIConstants.setNewReservation) {
+						if (dataResource.tag == APIConstants.SET_NEW_RESERVATION) {
 							block.invoke()
 						}
 					}

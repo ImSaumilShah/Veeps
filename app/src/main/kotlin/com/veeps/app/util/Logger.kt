@@ -34,10 +34,10 @@ object Logger {
 			"VeepsAPI",
 			"Request URL :: ${chain.request().method} ${chain.request().url} \n\n"
 		)
-		printWithTag("VeepsAPI", "Request Time :: $tookS Seconds ( $tookMs ms ) \n\n")
+		printWithTag("VeepsAPI", "Request Time for ${chain.request().url.encodedPath} :: $tookS Seconds ( $tookMs ms ) \n\n")
 		for (i in 0 until chain.request().headers.size) {
 			printWithTag(
-				"VeepsAPI", "Request Headers :: ${chain.request().headers.name(i)} : ${
+				"VeepsAPI", "Request Headers for ${chain.request().url.encodedPath} :: ${chain.request().headers.name(i)} : ${
 					chain.request().headers.value(
 						i
 					)
@@ -50,20 +50,16 @@ object Logger {
 			body?.writeTo(buffer)
 			printWithTag(
 				"VeepsAPI",
-				"Request Body :: ${if (buffer.size != 0L) buffer.readUtf8() else "null"} \n\n"
+				"Request Body for ${chain.request().url.encodedPath} :: ${if (buffer.size != 0L) buffer.readUtf8() else "null"} \n\n"
 			)
 		} catch (e: IOException) {
 			e.printStackTrace()
 			printWithTag(
 				"VeepsAPI",
-				"EXCEPTION Occurred while printing API Logs -- " + e.message + " \n\n"
+				"EXCEPTION Occurred while printing API Logs for ${chain.request().url.encodedPath} -- " + e.message + " \n\n"
 			)
 		}
-		printWithTag("VeepsAPI", "Response Code :: ${response.code} \n\n")
-		printWithTag(
-			"VeepsAPI",
-			"Response Codssssss :: ${("https://bacon.veeps.com/addstat?cur=0.0&pld=0.0&plv=ntv&dvm=iPhone15&dvv=Apple&pls=LIVE&p=iOS&s=b".uppercase())} \n\n"
-		)
+		printWithTag("VeepsAPI", "Response Code for ${chain.request().url.encodedPath} :: ${response.code} \n\n")
 		val maxLogSize = 4000
 		for (i in 0..bodyString.length / maxLogSize) {
 			val start = i * maxLogSize
@@ -71,7 +67,7 @@ object Logger {
 			end = min(end, bodyString.length)
 			printWithTag(
 				"VeepsAPI",
-				(if (i == 0) "Response :: " else DEFAULT.EMPTY_STRING) + bodyString.substring(
+				(if (i == 0) "Response for ${chain.request().url.encodedPath} :: " else DEFAULT.EMPTY_STRING) + bodyString.substring(
 					start,
 					end
 				)

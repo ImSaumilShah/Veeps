@@ -27,6 +27,7 @@ class VideoPlayerViewModel : ViewModel() {
 	fun fetchUserStats(userStatsAPIURL: String, eventIds: String) =
 		APIRepository().fetchUserStats(userStatsAPIURL, eventIds)
 
+	fun fetchAllPurchasedEvents() = APIRepository().fetchAllPurchasedEvents()
 	fun fetchEventStreamDetails(eventId: String) = APIRepository().fetchEventStreamDetails(eventId)
 	fun fetchStoryBoard(storyBoardURL: String) = APIRepository().fetchStoryBoard(storyBoardURL)
 	fun fetchCompanions(eventDetails: HashMap<String, Any>) =

@@ -3,9 +3,6 @@ package com.veeps.app.feature.video.ui
 import android.animation.Animator
 import android.animation.AnimatorListenerAdapter
 import android.annotation.SuppressLint
-import android.graphics.Bitmap
-import android.graphics.drawable.Drawable
-import android.net.Uri
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
@@ -17,32 +14,28 @@ import androidx.annotation.OptIn
 import androidx.core.content.ContextCompat
 import androidx.core.view.isVisible
 import androidx.lifecycle.MutableLiveData
-import androidx.media3.common.AudioAttributes
-import androidx.media3.common.C
-import androidx.media3.common.C.TRACK_TYPE_TEXT
-import androidx.media3.common.MediaItem
-import androidx.media3.common.PlaybackException
-import androidx.media3.common.Player
-import androidx.media3.common.Timeline
-import androidx.media3.common.TrackSelectionOverride
-import androidx.media3.common.Tracks
-import androidx.media3.common.text.CueGroup
 import androidx.media3.common.util.UnstableApi
-import androidx.media3.datasource.DefaultHttpDataSource
-import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.exoplayer.SeekParameters
-import androidx.media3.exoplayer.hls.HlsMediaSource
-import androidx.media3.exoplayer.source.MergingMediaSource
-import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
-import androidx.media3.exoplayer.util.EventLogger
 import androidx.media3.ui.TimeBar
 import androidx.recyclerview.widget.PagerSnapHelper
-import com.bumptech.glide.Glide
-import com.bumptech.glide.load.MultiTransformation
-import com.bumptech.glide.load.resource.bitmap.CenterInside
-import com.bumptech.glide.load.resource.bitmap.RoundedCorners
-import com.bumptech.glide.request.target.CustomTarget
-import com.bumptech.glide.request.transition.Transition
+import com.bitmovin.analytics.api.AnalyticsConfig
+import com.bitmovin.analytics.api.CustomData
+import com.bitmovin.analytics.api.SourceMetadata
+import com.bitmovin.player.api.PlaybackConfig
+import com.bitmovin.player.api.Player
+import com.bitmovin.player.api.PlayerBuilder
+import com.bitmovin.player.api.PlayerConfig
+import com.bitmovin.player.api.advertising.AdItem
+import com.bitmovin.player.api.advertising.AdSource
+import com.bitmovin.player.api.advertising.AdSourceType
+import com.bitmovin.player.api.advertising.AdvertisingConfig
+import com.bitmovin.player.api.deficiency.ErrorEvent
+import com.bitmovin.player.api.deficiency.PlayerErrorCode
+import com.bitmovin.player.api.deficiency.SourceErrorCode
+import com.bitmovin.player.api.drm.WidevineConfig
+import com.bitmovin.player.api.event.PlayerEvent
+import com.bitmovin.player.api.event.on
+import com.bitmovin.player.api.source.SourceBuilder
+import com.bitmovin.player.api.source.SourceConfig
 import com.pubnub.api.PNConfiguration
 import com.pubnub.api.PubNub
 import com.pubnub.api.UserId
@@ -54,6 +47,9 @@ import com.pubnub.api.models.consumer.PNStatus
 import com.pubnub.api.models.consumer.pubsub.PNMessageResult
 import com.pubnub.api.models.consumer.pubsub.PNSignalResult
 import com.pubnub.api.retry.RetryConfiguration
+import com.veeps.app.BuildConfig.bitmovinAnalyticsKey
+import com.veeps.app.BuildConfig.pubnubPublishKey
+import com.veeps.app.BuildConfig.pubnubSubscribeKey
 import com.veeps.app.R
 import com.veeps.app.core.BaseActivity
 import com.veeps.app.databinding.ActivityVideoPlayerScreenBinding
@@ -63,15 +59,15 @@ import com.veeps.app.extension.setHorizontalBias
 import com.veeps.app.feature.contentRail.model.ChatMessageItem
 import com.veeps.app.feature.contentRail.model.Entities
 import com.veeps.app.feature.video.adapter.ChatMessagesAdapter
-import com.veeps.app.feature.video.model.Subtitle
 import com.veeps.app.feature.video.viewModel.VideoPlayerViewModel
 import com.veeps.app.util.APIConstants
 import com.veeps.app.util.AppConstants
+import com.veeps.app.util.AppConstants.drmLicenseURL
 import com.veeps.app.util.AppPreferences
 import com.veeps.app.util.AppUtil
 import com.veeps.app.util.DEFAULT
+import com.veeps.app.util.EntityTypes
 import com.veeps.app.util.EventTypes
-import com.veeps.app.util.GlideThumbnailTransformation
 import com.veeps.app.util.ImageTags
 import com.veeps.app.util.IntValue
 import com.veeps.app.util.LastSignalTypes
@@ -81,7 +77,6 @@ import org.joda.time.Period
 import org.joda.time.format.PeriodFormatterBuilder
 import kotlin.math.roundToInt
 
-
 @OptIn(UnstableApi::class)
 class VideoPlayerScreen : BaseActivity<VideoPlayerViewModel, ActivityVideoPlayerScreenBinding>() {
 
@@ -89,14 +84,14 @@ class VideoPlayerScreen : BaseActivity<VideoPlayerViewModel, ActivityVideoPlayer
 	private lateinit var statsManagement: Handler
 	private lateinit var timerTask: Runnable
 	private lateinit var addStatsTask: Runnable
-	private lateinit var player: ExoPlayer
+	private lateinit var player: Player
 	private var timeout = Handler(Looper.getMainLooper())
 	private val inactivitySeconds = 10
 	private var scrubbedPosition = 0L
-	private var playbackStream = ""
+	private var playbackStream = DEFAULT.EMPTY_STRING
 	private var isScrubVisible = false
 	var trickPlayVisible = MutableLiveData<Boolean>()
-	private val trickPlayRunnable = Runnable { trickPlayVisible.setValue(false) }
+	private val trickPlayRunnable = Runnable { trickPlayVisible.value = false }
 	private lateinit var pubnub: PubNub
 	private lateinit var pubNubListener: SubscribeCallback
 	private var artistChannel = DEFAULT.EMPTY_STRING
@@ -106,6 +101,15 @@ class VideoPlayerScreen : BaseActivity<VideoPlayerViewModel, ActivityVideoPlayer
 	private var playingPosition = 0L
 	private var isChatEnabled = false
 	lateinit var chatAdapter: ChatMessagesAdapter
+	private val adItems: MutableList<AdItem> = ArrayList()
+	private var isDrmAvailable = false
+	private var isAdAvailable = false
+	private var isAdVisible = false
+	private var currentTime: String = DEFAULT.EMPTY_STRING
+	private var duration: String = DEFAULT.EMPTY_STRING
+	private var ticketId: String = DEFAULT.EMPTY_STRING
+	private var eventName: String? = DEFAULT.EMPTY_STRING
+	private var userType: String = DEFAULT.EMPTY_STRING
 
 	private fun getBackCallback(): OnBackPressedCallback {
 		val backPressedCallback = object : OnBackPressedCallback(true) {
@@ -194,51 +198,6 @@ class VideoPlayerScreen : BaseActivity<VideoPlayerViewModel, ActivityVideoPlayer
 		getCurrentTimer = Handler(Looper.getMainLooper())
 		statsManagement = Handler(Looper.getMainLooper())
 
-		addStatsTask = Runnable {
-			if (this::player.isInitialized) {
-				val currentTime: String =
-					(player.currentPosition / IntValue.NUMBER_1000).toDouble().toString()
-				val duration: String =
-					(player.duration / IntValue.NUMBER_1000).toDouble().toString()
-				val playerVersion =
-					"ntv"//"${BuildConfig.VERSION_NAME}(${BuildConfig.VERSION_CODE})"
-				val deviceModel: String = Build.MODEL
-				val deviceVendor: String = Build.MANUFACTURER
-				val playbackStreamType: String =
-					if (player.isCurrentMediaItemLive) EventTypes.LIVE else EventTypes.ON_DEMAND
-				val platform: String = getString(R.string.app_platform)
-				val userType: String = if (AppPreferences.get(
-						AppConstants.userSubscriptionStatus, "none"
-					) != "none"
-				) "m" else "b"
-
-				viewModel.eventId.value?.let { eventId ->
-					if (eventId.isNotBlank()) {
-						AppPreferences.set(AppConstants.generatedJWT, AppUtil.generateJWT(eventId))
-						val addStatsAPIURL = AppPreferences.get(
-							AppConstants.userBeaconBaseURL, DEFAULT.EMPTY_STRING
-						) + APIConstants.addStats
-						addStats(
-							addStatsAPIURL.trim(),
-							currentTime,
-							duration,
-							playerVersion,
-							deviceModel,
-							deviceVendor,
-							playbackStreamType,
-							platform,
-							userType
-						)
-					}
-				}
-			}
-			if (this::statsManagement.isInitialized && this::addStatsTask.isInitialized) {
-				statsManagement.removeCallbacks(addStatsTask)
-				statsManagement.removeCallbacksAndMessages(addStatsTask)
-				statsManagement.postDelayed(addStatsTask, 30000)
-			}
-		}
-
 		binding.chatFromPhone.setOnFocusChangeListener { _, hasFocus ->
 			binding.chatFromPhoneLabel.setTextColor(
 				ContextCompat.getColor(
@@ -257,11 +216,11 @@ class VideoPlayerScreen : BaseActivity<VideoPlayerViewModel, ActivityVideoPlayer
 
 		setupBlur()
 
-		binding.playPause.setOnClickListener { v ->
+		binding.playPause.setOnClickListener {
 			if (binding.playPause.isSelected) {
-				binding.videoPlayer.player?.pause().also { binding.playPause.isSelected = false }
+				player.pause().also { binding.playPause.isSelected = false }
 			} else {
-				binding.videoPlayer.player?.play().also { binding.playPause.isSelected = true }
+				player.play().also { binding.playPause.isSelected = true }
 			}
 		}
 
@@ -293,13 +252,14 @@ class VideoPlayerScreen : BaseActivity<VideoPlayerViewModel, ActivityVideoPlayer
 
 		viewModel.eventId.observe(this@VideoPlayerScreen) { eventId ->
 			if (!eventId.isNullOrBlank()) {
-				fetchUserStats(eventId)
+				fetchAllPurchasedEvents(eventId)
 			}
 		}
 
 		viewModel.playbackURL.observe(this@VideoPlayerScreen) { playbackURL ->
 			if (!playbackURL.isNullOrBlank()) {
 				if (this::player.isInitialized) {
+					// Create a new source config
 					//https://mtoczko.github.io/hls-test-streams/test-vtt/playlist.m3u8 // VOD 10 mins
 					//https://cdn.bitmovin.com/content/assets/sintel/hls/playlist.m3u8 // VOD Full
 					//https://cdn.bitmovin.com/content/assets/sintel/sintel.mpd // VOD DASH
@@ -307,13 +267,63 @@ class VideoPlayerScreen : BaseActivity<VideoPlayerViewModel, ActivityVideoPlayer
 					//https://mtoczko.github.io/hls-test-streams/test-group/playlist.m3u8 // VOD 1 min Quality changes
 					//https://mtoczko.github.io/hls-test-streams/test-vtt-ts-segments/playlist.m3u8 // vod 20 seconds timer
 					//https://cph-p2p-msl.akamaized.net/hls/live/2000341/test/master.m3u8 // Live HLS
-					val mediaSource = HlsMediaSource.Factory(DefaultHttpDataSource.Factory())
-						.setAllowChunklessPreparation(true)
-						.createMediaSource(MediaItem.fromUri(Uri.parse(playbackURL)))
-					player.setMediaSource(MergingMediaSource(mediaSource), playingPosition)
-					player.prepare()
-					player.play()
+					//https://devstreaming-cdn.apple.com/videos/streaming/examples/img_bipbop_adv_example_fmp4/master.m3u8 //HLS Bit-Bop Simple
+					//https://devstreaming-cdn.apple.com/videos/streaming/examples/historic_planet_content_2023-10-26-3d-video/main.m3u8 //basic HLS
+					//https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_16x9/bipbop_16x9_variant.m3u8 //HLS Bip-Bop - Language and Subtitles
+					//https://devstreaming-cdn.apple.com/videos/streaming/examples/adv_dv_atmos/main.m3u8 //HLS main VOD 4K
+
+
+					Logger.print("Saumil Playback URL - $playbackURL")
+					Logger.print("Saumil DRM Applicable - $isDrmAvailable. ${if (isDrmAvailable) "DRM License URL - $drmLicenseURL" else ""}")
+
+					val sourceConfig = SourceConfig.fromUrl(playbackURL)
+
+					// Attach DRM handling to the source config
+					if (isDrmAvailable) {
+						sourceConfig.apply {
+							this@apply.drmConfig = WidevineConfig(drmLicenseURL)
+						}
+					}
+
+					val customData: CustomData = CustomData.Builder().setCustomData1(userType)
+						.setCustomData2(Player.sdkVersion).setCustomData3(
+							AppPreferences.get(
+								AppConstants.userID,
+								DEFAULT.EMPTY_STRING
+							)
+						).setCustomData4(EntityTypes.EVENT).setCustomData5(eventName).build()
+					// create a source with a sourceMetadata for custom analytics tracking
+					val sourceMetadata: SourceMetadata =
+						SourceMetadata.Builder().setTitle(eventName).setIsLive(player.isLive)
+							.setCustomData(customData)
+							.setVideoId(viewModel.eventId.value ?: DEFAULT.EMPTY_STRING).build()
+					val source =
+						SourceBuilder(sourceConfig).configureAnalytics(sourceMetadata).build()
+					// Load the source
+					player.load(source)
+					binding.videoPlayer.isUiVisible = false
 				}
+			}
+		}
+	}
+
+	private fun fetchAllPurchasedEvents(eventId: String) {
+		viewModel.fetchAllPurchasedEvents().observe(this@VideoPlayerScreen) { allPurchasedEvents ->
+			fetch(
+				allPurchasedEvents,
+				isLoaderEnabled = false,
+				canUserAccessScreen = true,
+				shouldBeInBackground = true,
+			) {
+				allPurchasedEvents.response?.let { railData ->
+					if (railData.data.isNotEmpty()) {
+						val eventData = railData.data.filter { it.eventId == eventId }
+						if (eventData.size == 1) {
+							ticketId = eventData.get(0).id.toString()
+						}
+					}
+				}
+				fetchUserStats(eventId)
 			}
 		}
 	}
@@ -333,140 +343,156 @@ class VideoPlayerScreen : BaseActivity<VideoPlayerViewModel, ActivityVideoPlayer
 	}
 
 	private fun setupVideoPlayer() {
-		releaseVideoPlayer()
-		val trackSelector = DefaultTrackSelector(this@VideoPlayerScreen)
-		player = ExoPlayer.Builder(this@VideoPlayerScreen).setTrackSelector(trackSelector).build()
-		player.setSeekParameters(SeekParameters.EXACT)
-		player.addListener(object : Player.Listener {
-			override fun onTimelineChanged(timeline: Timeline, reason: Int) {
-				super.onTimelineChanged(timeline, reason)
-				if (player.isCurrentMediaItemLive) {
-					binding.topControls.visibility = View.VISIBLE
-					binding.liveControls.visibility = View.VISIBLE
-					binding.standBy.visibility = View.GONE
-					binding.vodControls.visibility = View.GONE
-				} else {
-					binding.topControls.visibility = View.VISIBLE
-					binding.vodControls.visibility = View.VISIBLE
-					binding.liveControls.visibility = View.GONE
-					binding.standBy.visibility = View.GONE
-				}
-			}
+		binding.videoPlayer.isUiVisible = false
 
-			override fun onCues(cueGroup: CueGroup) {
-				super.onCues(cueGroup)
-				if (cueGroup.cues.isNotEmpty() && cueGroup.cues.isNotEmpty()) {
-					for (i in 0 until cueGroup.cues.size) {
-						Logger.doNothing()
-					}
-				}
-			}
+		player = PlayerBuilder(this).setPlayerConfig(createPlayerConfig()).configureAnalytics(AnalyticsConfig(bitmovinAnalyticsKey)).build()
+		binding.videoPlayer.player = player
+		binding.videoPlayer.keepScreenOn = true
 
-			override fun onIsPlayingChanged(isPlaying: Boolean) {
-				if (isPlaying) {
-					if (this@VideoPlayerScreen::statsManagement.isInitialized && this@VideoPlayerScreen::addStatsTask.isInitialized) {
-						statsManagement.removeCallbacks(addStatsTask)
-						statsManagement.removeCallbacksAndMessages(addStatsTask)
-						statsManagement.post(addStatsTask)
-					}
-					binding.loader.visibility = View.GONE
-					binding.playPause.isSelected = true
-					binding.videoPlayer.postDelayed(
-						this@VideoPlayerScreen::getCurrentPlayerPosition,
-						IntValue.NUMBER_1000.toLong()
+		player.on<PlayerEvent.Error> { errorEvent: ErrorEvent ->
+			Logger.print("Saumil Error Event - $errorEvent")
+			binding.playPause.isSelected = false
+			when (errorEvent.code) {
+				PlayerErrorCode.General, PlayerErrorCode.DecoderGeneral, PlayerErrorCode.DecodingFailed, PlayerErrorCode.LicenseKeyNotFound, PlayerErrorCode.DecoderInitialization, PlayerErrorCode.DecodingExceedsCapabilities, PlayerErrorCode.DecodingUnsupported, PlayerErrorCode.LicenseAuthenticationFailed -> {
+					showError(
+						Screens.PLAYER_ERROR,
+						getString(R.string.video_error_title),
+						getString(R.string.video_error_description)
 					)
-					if (player.isCurrentMediaItemLive) {
-						binding.playPause.isFocusable = false
-						binding.playPause.isFocusableInTouchMode = false
-						binding.progress.isFocusable = false
-						binding.progress.isFocusableInTouchMode = false
-						binding.chatFromPhone.isFocusable = true
-						if (isChatEnabled) binding.chatToggle.isFocusable = true
-						if (!binding.chatFromPhone.isFocused && !binding.chatToggle.isFocused) binding.chatFromPhone.requestFocus()
-					} else {
-						binding.chatToggle.isFocusable = false
-						binding.chatToggle.isFocusableInTouchMode = false
-						binding.chatFromPhone.isFocusable = false
-						binding.chatFromPhone.isFocusableInTouchMode = false
-						binding.playPause.isFocusable = true
-						binding.progress.isFocusable = true
-						if (!binding.playPause.isFocused && !binding.progress.isFocused) binding.playPause.requestFocus()
-					}
-				} else {
-					if (this@VideoPlayerScreen::statsManagement.isInitialized && this@VideoPlayerScreen::addStatsTask.isInitialized) {
-						statsManagement.removeCallbacks(addStatsTask)
-						statsManagement.removeCallbacksAndMessages(addStatsTask)
-					}
-					binding.playPause.isSelected = false
 				}
-				super.onIsPlayingChanged(isPlaying)
+
+				SourceErrorCode.General, SourceErrorCode.HttpStatusCode, SourceErrorCode.DrmGeneral, SourceErrorCode.Io, SourceErrorCode.ClearTextConnection, SourceErrorCode.ConnectionFailed, SourceErrorCode.ConnectionTimeout, SourceErrorCode.DrmKeyExpired, SourceErrorCode.DrmRequestFailed, SourceErrorCode.DrmUnsupported -> {
+					showError(
+						Screens.PLAYER_ERROR,
+						getString(R.string.video_error_title),
+						getString(R.string.video_error_description)
+					)
+				}
+
+				else -> {
+					showError(
+						Screens.PLAYER_ERROR,
+						getString(R.string.video_error_title),
+						getString(R.string.video_error_description)
+					)
+				}
+			}
+		}
+
+		player.on<PlayerEvent.Playing> {
+			resumePlayer(playingPosition)
+			binding.videoPlayer.isUiVisible = false
+			if (this@VideoPlayerScreen::statsManagement.isInitialized && this@VideoPlayerScreen::addStatsTask.isInitialized) {
+				statsManagement.removeCallbacks(addStatsTask)
+				statsManagement.removeCallbacksAndMessages(addStatsTask)
+				statsManagement.post(addStatsTask)
+			}
+			binding.loader.visibility = View.GONE
+			binding.playPause.isSelected = true
+			binding.videoPlayer.postDelayed(
+				this@VideoPlayerScreen::getPlayerProgress,
+				if (isAdAvailable && isAdVisible) IntValue.NUMBER_500.toLong() else IntValue.NUMBER_1000.toLong()
+			)
+			if (player.isLive) {
+				binding.playPause.isFocusable = false
+				binding.playPause.isFocusableInTouchMode = false
+				binding.progress.isFocusable = false
+				binding.progress.isFocusableInTouchMode = false
+				binding.chatFromPhone.isFocusable = true
+				if (isChatEnabled) binding.chatToggle.isFocusable = true
+				if (!binding.chatFromPhone.isFocused && !binding.chatToggle.isFocused) binding.chatFromPhone.requestFocus()
+			} else {
+				binding.chatToggle.isFocusable = false
+				binding.chatToggle.isFocusableInTouchMode = false
+				binding.chatFromPhone.isFocusable = false
+				binding.chatFromPhone.isFocusableInTouchMode = false
+				binding.playPause.isFocusable = true
+				binding.progress.isFocusable = true
+				if (!binding.playPause.isFocused && !binding.progress.isFocused) binding.playPause.requestFocus()
+			}
+		}
+
+		player.on<PlayerEvent.Paused> {
+			binding.videoPlayer.isUiVisible = false
+			if (this@VideoPlayerScreen::statsManagement.isInitialized && this@VideoPlayerScreen::addStatsTask.isInitialized) {
+				statsManagement.removeCallbacks(addStatsTask)
+				statsManagement.removeCallbacksAndMessages(addStatsTask)
 			}
 
-			override fun onPlaybackStateChanged(playbackState: Int) {
-				if (playbackState == Player.STATE_BUFFERING) {
-					binding.loader.visibility = View.VISIBLE
-				}
-				if (playbackState == Player.STATE_ENDED) {
-					binding.playPause.isSelected = false
-				}
-				super.onPlaybackStateChanged(playbackState)
-			}
+			binding.playPause.isSelected = false
+		}
 
-			override fun onPlayerError(error: PlaybackException) {
-				super.onPlayerError(error)
-				binding.playPause.isSelected = false
-				showError(
-					Screens.PLAYER_ERROR,
-					"Sorry, Something went wrong.",
-					"We’re having trouble playing this video. Please try again or visit veeps.com/help for more information."
-				)
-			}
+		player.on<PlayerEvent.PlaybackFinished> {
+			binding.playPause.isSelected = false
+		}
 
-			override fun onTracksChanged(tracks: Tracks) {
-				super.onTracksChanged(tracks)
-				if (tracks.isEmpty) {
-					Logger.doNothing()
-				} else {
-					if (tracks.containsType(TRACK_TYPE_TEXT)) {
-						val subtitles: ArrayList<Subtitle> = arrayListOf()
-						tracks.groups.forEach { group ->
-							when (group.type) {
-								TRACK_TYPE_TEXT -> {
-									if (group.isSupported) {
-										for (position in 0..<group.mediaTrackGroup.length) {
-											val format = group.mediaTrackGroup.getFormat(position)
-											val subtitle = Subtitle(
-												id = format.id ?: DEFAULT.EMPTY_STRING,
-												language = format.language ?: DEFAULT.EMPTY_STRING,
-												label = format.label ?: DEFAULT.EMPTY_STRING,
-												mediaGroup = group.mediaTrackGroup,
-												trackPosition = position
-											)
-											subtitles.add(subtitle)
-										}
-									}
-								}
-							}
-						}
-					}
+		player.on<PlayerEvent.StallStarted> {
+			binding.loader.visibility = View.VISIBLE
+		}
+
+		player.on<PlayerEvent.StallEnded> {
+			binding.loader.visibility = View.GONE
+		}
+
+		player.on<PlayerEvent.TimeChanged> {
+			if (player.isLive) {
+				binding.topControls.visibility = View.VISIBLE
+				binding.liveControls.visibility = View.VISIBLE
+				binding.standBy.visibility = View.GONE
+				binding.vodControls.visibility = View.GONE
+			} else {
+				binding.topControls.visibility = View.VISIBLE
+				binding.vodControls.visibility = View.VISIBLE
+				binding.liveControls.visibility = View.GONE
+				binding.standBy.visibility = View.GONE
+				if (isAdAvailable && player.isAd) {
+					binding.videoPlayer.isUiVisible = false
+					trickPlayVisible.value = true
+					binding.chatToggle.isFocusable = false
+					binding.chatToggle.isFocusableInTouchMode = false
+					binding.chatFromPhone.isFocusable = false
+					binding.chatFromPhone.isFocusableInTouchMode = false
+					binding.playPause.isFocusable = true
+					binding.progress.isFocusable = true
+					if (!binding.playPause.isFocused && !binding.progress.isFocused) binding.playPause.requestFocus()
+					isAdVisible = true
+					binding.topControls.visibility = View.GONE
+					binding.playPause.requestFocus()
+					binding.playPause.isSelected = true
 				}
 			}
-		})
+		}
+
+		player.on<PlayerEvent.AdStarted> {
+			binding.videoPlayer.isUiVisible = false
+			getPlayerProgress()
+		}
+
+		player.on<PlayerEvent.AdFinished> {
+			binding.videoPlayer.isUiVisible = false
+			isAdVisible = false
+		}
+
+		player.on<PlayerEvent.AdError> {
+			binding.videoPlayer.isUiVisible = false
+			isAdVisible = false
+		}
+
 		binding.progress.setOnFocusChangeListener { _, hasFocus ->
 			if (hasFocus) {
-				scrubbedPosition = player.currentPosition / IntValue.NUMBER_1000
+				scrubbedPosition = player.currentTime.toLong()
 				isScrubVisible = true
 				setImagePreview()
 				binding.progress.showScrubber(500)
 			} else {
-				scrubbedPosition = player.currentPosition / IntValue.NUMBER_1000
+				scrubbedPosition = player.currentTime.toLong()
 				isScrubVisible = false
 				setImagePreview()
-				getCurrentPlayerPosition()
-				player.playWhenReady = true
+				getPlayerProgress()
 				binding.progress.hideScrubber(500)
 			}
 		}
+
 		binding.progress.addListener(object : TimeBar.OnScrubListener {
 			override fun onScrubStart(timeBar: TimeBar, position: Long) {
 				scrubbedPosition = position
@@ -487,21 +513,19 @@ class VideoPlayerScreen : BaseActivity<VideoPlayerViewModel, ActivityVideoPlayer
 				isScrubVisible = true
 				setImagePreview()
 			}
-
 		})
-		player.setAudioAttributes(
-			AudioAttributes.Builder().setUsage(C.USAGE_MEDIA)
-				.setContentType(C.AUDIO_CONTENT_TYPE_MOVIE).build(), true
-		)
-		player.addAnalyticsListener(EventLogger())
-		binding.videoPlayer.player = player
-		player.repeatMode = Player.REPEAT_MODE_OFF
 
 		// In INACTIVITY_SECONDS seconds of inactivity hide the trickBar
 		timeout.postDelayed(trickPlayRunnable, (inactivitySeconds * 1000).toLong())
 	}
 
-	private fun initPubNub() {
+	private fun resumePlayer(playingPosition: Long) {
+		player.seek(playingPosition.toDouble())
+		player.play()
+		binding.playPause.requestFocus()
+	}
+
+	private fun initPubNub(eventDetails: Entities) {
 		if (this::pubnub.isInitialized && this::pubNubListener.isInitialized) pubnub.removeListener(
 			pubNubListener
 		)
@@ -531,7 +555,7 @@ class VideoPlayerScreen : BaseActivity<VideoPlayerViewModel, ActivityVideoPlayer
 
 			override fun signal(pubnub: PubNub, pnSignalResult: PNSignalResult) {
 				when (pnSignalResult.message.asJsonObject.get("ls").asString) {
-					LastSignalTypes.DISCONNECTED, LastSignalTypes.NO_SIGNAL -> {
+					LastSignalTypes.DISCONNECTED -> {
 						binding.videoPlayer.player?.pause()
 						binding.standBy.visibility = View.VISIBLE
 						binding.topControls.visibility = View.VISIBLE
@@ -541,20 +565,20 @@ class VideoPlayerScreen : BaseActivity<VideoPlayerViewModel, ActivityVideoPlayer
 					}
 
 					LastSignalTypes.CONNECTED -> {
-						binding.videoPlayer.player?.pause()
+						player.pause()
 						binding.standBy.visibility = View.VISIBLE
 						binding.topControls.visibility = View.VISIBLE
 						binding.liveControls.visibility = View.VISIBLE
 						binding.vodControls.visibility = View.GONE
 					}
 
-					LastSignalTypes.ACTIVE, LastSignalTypes.RECORDING -> {
+					LastSignalTypes.ACTIVE, LastSignalTypes.RECORDING, LastSignalTypes.NO_SIGNAL -> {
 						binding.standBy.visibility = View.GONE
 						viewModel.playbackURL.postValue(playbackStream.ifBlank { DEFAULT.EMPTY_STRING })
 					}
 
 					LastSignalTypes.IDLE -> {
-						binding.videoPlayer.player?.pause()
+						player.pause()
 						binding.standBy.visibility = View.VISIBLE
 						binding.topControls.visibility = View.VISIBLE
 						binding.liveControls.visibility = View.VISIBLE
@@ -582,7 +606,7 @@ class VideoPlayerScreen : BaseActivity<VideoPlayerViewModel, ActivityVideoPlayer
 						timeout.postDelayed(trickPlayRunnable, (inactivitySeconds * 1000).toLong())
 						if (trickPlayVisible.value != null && !trickPlayVisible.value!!) {
 							trickPlayVisible.value = true
-							if (player.isCurrentMediaItemLive) binding.chatFromPhone.requestFocus() else binding.playPause.requestFocus()
+							if (player.isLive) binding.chatFromPhone.requestFocus() else binding.playPause.requestFocus()
 						}
 						binding.errorContainer.visibility = View.GONE
 					}
@@ -590,9 +614,55 @@ class VideoPlayerScreen : BaseActivity<VideoPlayerViewModel, ActivityVideoPlayer
 					LastSignalTypes.CHAT_MESSAGE_DELETED -> {
 
 					}
+
+					LastSignalTypes.STREAM_ENDED -> {
+						binding.standBy.visibility = View.GONE
+
+						if (eventDetails.eventReWatchDuration.isNullOrBlank()) {
+							binding.reWatch.text = getString(R.string.re_watch_not_available)
+						} else {
+							val reWatchDuration =
+								eventDetails.eventReWatchDuration!!.ifBlank { "0" }.toInt()
+							if (reWatchDuration == 0) {
+								binding.reWatch.text = getString(R.string.re_watch_not_available)
+							} else {
+								val reWatchDurationString =
+									AppUtil.calculateReWatchTime(reWatchDuration)
+								binding.reWatch.text = getString(
+									R.string.re_watch_available_for_time, reWatchDurationString
+								)
+							}
+						}
+						showError(
+							Screens.STREAM_END,
+							"Thanks for watching the show!",
+							"Hang tight, rewatch available soon"
+						)
+					}
 				}
 			}
 		}
+
+		/*val config = PNConfiguration.builder(
+			userId = UserId(
+				AppPreferences.get(
+					AppConstants.userID,
+					getString(R.string.app_platform)
+				) ?: getString(R.string.app_platform)
+			), subscribeKey = pubnubSubscribeKey
+		).apply {
+			publishKey = pubnubPublishKey
+			secure = true
+			logVerbosity = PNLogVerbosity.BODY
+			heartbeatNotificationOptions = PNHeartbeatNotificationOptions.ALL
+			retryConfiguration = RetryConfiguration.Exponential(
+				minDelayInSec = 3, maxDelayInSec = 10, maxRetryNumber = 5
+			)
+		}
+		pubnub = PubNub.create(config.build())
+		pubnub.addListener(pubNubListener)
+
+		pubnub.subscriptionSetOf(channels = setOf(signalChannel, artistChannel, subscribeChannel),).subscribe()*/
 
 		val config = PNConfiguration(
 			UserId(
@@ -601,8 +671,8 @@ class VideoPlayerScreen : BaseActivity<VideoPlayerViewModel, ActivityVideoPlayer
 				) ?: getString(R.string.app_platform)
 			)
 		).apply {
-			subscribeKey = "sub-c-84ee6f14-961d-11ea-a94f-52daec260573"
-			publishKey = "pub-c-eb43a482-29d3-4ffd-8169-adf1cbde3e2d"
+			subscribeKey = pubnubSubscribeKey
+			publishKey = pubnubPublishKey
 			secure = true
 			logVerbosity = PNLogVerbosity.BODY
 			heartbeatNotificationOptions = PNHeartbeatNotificationOptions.ALL
@@ -610,9 +680,7 @@ class VideoPlayerScreen : BaseActivity<VideoPlayerViewModel, ActivityVideoPlayer
 		pubnub = PubNub(config)
 		pubnub.addListener(pubNubListener)
 		pubnub.configuration.retryConfiguration = RetryConfiguration.Exponential(
-			minDelayInSec = 3,
-			maxDelayInSec = 10,
-			maxRetryNumber = 5
+			minDelayInSec = 3, maxDelayInSec = 10, maxRetryNumber = 5
 		)
 
 		pubnub.subscribe(channels = listOf(signalChannel, artistChannel, subscribeChannel))
@@ -647,47 +715,57 @@ class VideoPlayerScreen : BaseActivity<VideoPlayerViewModel, ActivityVideoPlayer
 		}
 	}
 
-	fun setSubtitles(needDisabled: Boolean, subtitle: Subtitle) {
-		if (needDisabled) {
-			player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
-				.setTrackTypeDisabled(TRACK_TYPE_TEXT, /* disabled= */ true).build()
-		} else {
-			player.trackSelectionParameters =
-				player.trackSelectionParameters.buildUpon().setTrackTypeDisabled(
-					TRACK_TYPE_TEXT, /* disabled= */
-					false
-				).setOverrideForType(
-					TrackSelectionOverride(
-						subtitle.mediaGroup, /* trackIndex= */
-						subtitle.trackPosition
-					)
-				).build()
-		}
-	}
-
 	private fun setImagePreview() {
+		val aligner = 160L
 		val positionInPercentage =
-			scrubbedPosition / (player.duration / IntValue.NUMBER_1000).toDouble().round(2)
-				.toFloat()
-		binding.vodControls.setHorizontalBias(R.id.image_preview, positionInPercentage)
-		if (!viewModel.tiles.value.isNullOrEmpty() && isScrubVisible && binding.progress.hasFocus()) {
-			binding.imagePreview.clipToOutline = true
-			Glide.with(binding.imagePreview.context).asBitmap().load(viewModel.storyBoard ?: "")
-				.transform(
-					MultiTransformation(
-						GlideThumbnailTransformation(
-							scrubbedPosition,
-							viewModel.tileWidth.value ?: 0,
-							viewModel.tileHeight.value ?: 0,
-							viewModel.tiles.value ?: arrayListOf(),
-						), CenterInside(), RoundedCorners(IntValue.NUMBER_5)
-					)
-				).placeholder(binding.imagePreview.drawable).error(R.drawable.card_background_black)
-				.into(binding.imagePreview)
-			binding.imagePreview.visibility = View.VISIBLE
-		} else {
-			binding.imagePreview.visibility = View.INVISIBLE
-		}
+			maxOf(scrubbedPosition - aligner, aligner) / player.duration.round(2).toFloat()
+		binding.vodControls.setHorizontalBias(R.id.image_preview, positionInPercentage.toFloat())
+//		if (!viewModel.tiles.value.isNullOrEmpty() && isScrubVisible && binding.progress.hasFocus()) {
+//			binding.imagePreview.clipToOutline = true
+//			runOnUiThread {
+//				Glide.with(binding.imagePreview.context).asBitmap().load(viewModel.storyBoard ?: "")
+//					.transform(
+//						MultiTransformation(
+//							GlideThumbnailTransformation(
+//								scrubbedPosition,
+//								viewModel.tileWidth.value ?: 0,
+//								viewModel.tileHeight.value ?: 0,
+//								viewModel.tiles.value ?: arrayListOf(),
+//							), CenterInside(), RoundedCorners(IntValue.NUMBER_5)
+//						)
+//					).placeholder(binding.imagePreview.drawable).error(R.drawable.card_background_black)
+//					.into(binding.imagePreview)
+//
+//				val tiles = viewModel.tiles.value ?: arrayListOf()
+//				var x = 0
+//				var y = 0
+//				for (position in tiles.indices) {
+//					try {
+//						if (scrubbedPosition >= tiles[position].start && scrubbedPosition <= tiles[position + 1].start) {
+//							x = tiles[position].x
+//							y = tiles[position].y
+//							break
+//						}
+//					} catch (e: Exception) {
+//						if (scrubbedPosition >= tiles[position].start) {
+//							x = tiles[position].x
+//							y = tiles[position].y
+//							break
+//						}
+//					}
+//				}
+//				viewModel.storyBoard?.let {
+//					val frameBitmap = Bitmap.createBitmap(it, x, y, viewModel.tileWidth.value ?: 0, viewModel.tileHeight.value ?: 0)
+//					binding.imagePreview.setImageBitmap(frameBitmap)
+//				} ?: run {
+//					binding.imagePreview.setImageDrawable(AppCompatResources.getDrawable(this@VideoPlayerScreen, R.drawable.card_background_black))
+//				}
+//
+//			}
+//			binding.imagePreview.visibility = View.VISIBLE
+//		} else {
+//			binding.imagePreview.visibility = View.INVISIBLE
+//		}
 		val seekDuration =
 			PeriodFormatterBuilder().printZeroAlways().minimumPrintedDigits(2).appendHours()
 				.appendSeparator(":").printZeroAlways().minimumPrintedDigits(2).appendMinutes()
@@ -702,40 +780,15 @@ class VideoPlayerScreen : BaseActivity<VideoPlayerViewModel, ActivityVideoPlayer
 
 	private fun releaseVideoPlayer() {
 		if (this::player.isInitialized) {
-			player.playWhenReady = false
-			player.pause()
-			player.release()
-		}
-	}
-
-	private fun getCurrentPlayerPosition() {
-		val bufferedPosition = player.bufferedPosition / IntValue.NUMBER_1000
-		val currentPosition = player.currentPosition / IntValue.NUMBER_1000
-		val totalDuration = player.duration / IntValue.NUMBER_1000
-		if (player.isPlaying) scrubbedPosition = currentPosition
-		setImagePreview()
-		binding.progress.setDuration(totalDuration)
-		binding.progress.setBufferedPosition(bufferedPosition)
-		binding.progress.setPosition(currentPosition)
-		val currentDuration =
-			PeriodFormatterBuilder().printZeroAlways().minimumPrintedDigits(2).appendHours()
-				.appendSeparator(":").printZeroAlways().minimumPrintedDigits(2).appendMinutes()
-				.appendSeparator(":").printZeroAlways().minimumPrintedDigits(2).appendSeconds()
-				.toFormatter().print(
-					Period.seconds((totalDuration - currentPosition).toInt()).normalizedStandard()
-				)
-		binding.currentDuration.text = currentDuration ?: "00:00:00"
-		if (player.isPlaying) {
-			binding.videoPlayer.postDelayed(
-				{ getCurrentPlayerPosition() }, IntValue.NUMBER_1000.toLong()
-			)
+			binding.videoPlayer.onPause()
+			binding.videoPlayer.onDestroy()
 		}
 	}
 
 	private fun fetchUserStats(eventId: String) {
 		val userStatsAPIURL = AppPreferences.get(
 			AppConstants.userBeaconBaseURL, DEFAULT.EMPTY_STRING
-		) + APIConstants.fetchUserStats
+		) + APIConstants.FETCH_USER_STATS
 		AppPreferences.set(AppConstants.generatedJWT, AppUtil.generateJWT(eventIds = eventId))
 		viewModel.fetchUserStats(userStatsAPIURL, eventIds = eventId)
 			.observe(this@VideoPlayerScreen) { userStatsDetails ->
@@ -749,10 +802,9 @@ class VideoPlayerScreen : BaseActivity<VideoPlayerViewModel, ActivityVideoPlayer
 						playingPosition = if (userStatsResponse.userStats.isNotEmpty()) {
 							val stats = userStatsResponse.userStats.filter { it.eventId == eventId }
 							if (stats.size == 1) {
-								val currentStat = (stats[0].cursor / stats[0].duration) * 100
+								val currentStat = (stats[0].cursor / stats[0].duration)
 								if (currentStat < 95) {
-									stats[0].cursor.roundToInt().times(IntValue.NUMBER_1000)
-										.toLong()
+									stats[0].cursor.roundToInt().toLong()
 								} else {
 									0
 								}
@@ -792,11 +844,12 @@ class VideoPlayerScreen : BaseActivity<VideoPlayerViewModel, ActivityVideoPlayer
 							binding.heroImage.loadImage(posterImage, ImageTags.HERO)
 							binding.chatFromPhoneBackground.loadImage(posterImage, ImageTags.HERO)
 							fetchCompanions(eventId, organizationName, ticketId)
-							fetchStoryBoard(eventDetails.storyboards.json ?: "")
+//							fetchStoryBoard(eventDetails.storyboards.json ?: "")
+							eventName = eventDetails.eventName ?: DEFAULT.EMPTY_STRING
 							binding.title.text =
-								if (eventDetails.lineup.isNotEmpty()) "${eventDetails.lineup[0].name} - ${eventDetails.eventName}" else "${eventDetails.eventName}"
+								if (!eventDetails.presentation.subtitle.isNullOrBlank()) "${eventDetails.presentation.subtitle} - ${eventDetails.eventName}" else "${eventDetails.eventName}"
 							binding.errorTitle.text =
-								if (eventDetails.lineup.isNotEmpty()) "${eventDetails.lineup[0].name} - ${eventDetails.eventName}" else "${eventDetails.eventName}"
+								if (!eventDetails.presentation.subtitle.isNullOrBlank()) "${eventDetails.presentation.subtitle} - ${eventDetails.eventName}" else "${eventDetails.eventName}"
 //							viewModel.playbackURL.postValue(eventDetails.playback.streamUrl?.ifBlank { DEFAULT.EMPTY_STRING }
 //								?: DEFAULT.EMPTY_STRING)
 							setEventData(eventDetails)
@@ -813,8 +866,62 @@ class VideoPlayerScreen : BaseActivity<VideoPlayerViewModel, ActivityVideoPlayer
 		publishChannel = eventDetails.chat.chatChannels.mainPublish ?: DEFAULT.EMPTY_STRING
 		subscribeChannel = eventDetails.chat.chatChannels.mainSubscribe ?: DEFAULT.EMPTY_STRING
 		signalChannel = eventDetails.chat.chatChannels.signals ?: DEFAULT.EMPTY_STRING
-		playbackStream = eventDetails.playback.streamUrl?.ifBlank { DEFAULT.EMPTY_STRING }
-			?: DEFAULT.EMPTY_STRING
+
+		isDrmAvailable = false//!eventDetails.playback.widevineUrl.isNullOrBlank()
+		val streamURL = eventDetails.playback.streamUrl?.ifBlank { DEFAULT.EMPTY_STRING } ?: DEFAULT.EMPTY_STRING
+		val widevineURL = eventDetails.playback.widevineUrl?.ifBlank { streamURL } ?: DEFAULT.EMPTY_STRING
+		playbackStream = if (isDrmAvailable) widevineURL else streamURL
+
+		if (isAdAvailable) {
+			eventDetails.playback.ads.let { ads ->
+				for (ad in ads) {
+					val adSource = ad.adUrl?.ifBlank { DEFAULT.EMPTY_STRING }
+						?.let { AdSource(AdSourceType.Bitmovin, it) }
+					val adItem = adSource?.let { AdItem(ad.adPosition ?: "pre", it) }
+					adItem?.let { adItems.add(it) }
+				}
+			}
+		}
+
+		userType = AppUtil.getUserType(eventDetails)
+		addStatsTask = Runnable {
+			if (player.isPlaying) {
+				currentTime = player.currentTime.toString()
+				duration = player.duration.toString()
+				val playerVersion =
+					"ntv"//"${BuildConfig.VERSION_NAME}(${BuildConfig.VERSION_CODE})"
+				val deviceModel: String = Build.MODEL
+				val deviceVendor: String = Build.MANUFACTURER
+				val playbackStreamType: String =
+					if (player.isLive) EventTypes.LIVE else EventTypes.ON_DEMAND
+				val platform: String = getString(R.string.app_platform)
+
+				viewModel.eventId.value?.let { eventId ->
+					if (eventId.isNotBlank()) {
+						AppPreferences.set(AppConstants.generatedJWT, AppUtil.generateJWT(eventId))
+						val addStatsAPIURL = AppPreferences.get(
+							AppConstants.userBeaconBaseURL, DEFAULT.EMPTY_STRING
+						) + APIConstants.ADD_STATS
+						addStats(
+							addStatsAPIURL.trim(),
+							currentTime,
+							duration,
+							playerVersion,
+							deviceModel,
+							deviceVendor,
+							playbackStreamType,
+							platform,
+							userType
+						)
+					}
+				}
+			}
+			if (this::statsManagement.isInitialized && this::addStatsTask.isInitialized) {
+				statsManagement.removeCallbacks(addStatsTask)
+				statsManagement.removeCallbacksAndMessages(addStatsTask)
+				statsManagement.postDelayed(addStatsTask, 30000)
+			}
+		}
 
 		if (isChatEnabled.and(
 				status.contains(EventTypes.LIVE, true)
@@ -822,7 +929,7 @@ class VideoPlayerScreen : BaseActivity<VideoPlayerViewModel, ActivityVideoPlayer
 					.or(status.contains(EventTypes.ENDED, true))
 			)
 		) {
-			initPubNub()
+			initPubNub(eventDetails)
 			binding.chat.visibility =
 				if (isChatEnabled && binding.chatToggle.isSelected) View.VISIBLE else View.GONE
 		}
@@ -883,25 +990,26 @@ class VideoPlayerScreen : BaseActivity<VideoPlayerViewModel, ActivityVideoPlayer
 					storyBoardResponse.response?.let { storyBoardImages ->
 						if (storyBoardImages.tiles.isNotEmpty()) {
 							viewModel.storyBoardURL.postValue(storyBoardImages.url)
-							Glide.with(binding.imagePreview.context).asBitmap()
-								.load(storyBoardImages.url)
-								.placeholder(R.drawable.card_background_black)
-								.error(R.drawable.card_background_black)
-								.into(object : CustomTarget<Bitmap>() {
-									override fun onResourceReady(
-										resource: Bitmap, transition: Transition<in Bitmap>?
-									) {
-										viewModel.storyBoard = resource
-									}
-
-									override fun onLoadCleared(placeholder: Drawable?) {
-
-									}
-
-								})
-							viewModel.tileWidth.postValue(storyBoardImages.tileWidth)
-							viewModel.tileHeight.postValue(storyBoardImages.tileHeight)
-							viewModel.tiles.postValue(storyBoardImages.tiles)
+//							runOnUiThread {
+//								Glide.with(binding.imagePreview.context).asBitmap()
+//									.load(storyBoardImages.url)
+//									.placeholder(R.drawable.card_background_black)
+//									.error(R.drawable.card_background_black)
+//									.into(object : CustomTarget<Bitmap>() {
+//										override fun onResourceReady(
+//											resource: Bitmap, transition: Transition<in Bitmap>?
+//										) {
+//											viewModel.storyBoard = resource
+//										}
+//
+//										override fun onLoadCleared(placeholder: Drawable?) {
+//
+//										}
+//									})
+//							}
+//							viewModel.tileWidth.postValue(storyBoardImages.tileWidth)
+//							viewModel.tileHeight.postValue(storyBoardImages.tileHeight)
+//							viewModel.tiles.postValue(storyBoardImages.tiles)
 						}
 					}
 				}
@@ -1058,7 +1166,7 @@ class VideoPlayerScreen : BaseActivity<VideoPlayerViewModel, ActivityVideoPlayer
 		binding.negative.nextFocusForwardId =
 			if (binding.positive.isEnabled) binding.positive.id else binding.negative.id
 
-		binding.videoPlayer.player?.pause()
+		player.pause()
 		binding.errorContainer.visibility = View.VISIBLE
 		binding.errorContainer.apply {
 			alpha = 0f
@@ -1093,7 +1201,7 @@ class VideoPlayerScreen : BaseActivity<VideoPlayerViewModel, ActivityVideoPlayer
 	}
 
 	fun onChatFromPhoneClicked() {
-		binding.videoPlayer.player?.pause()
+		player.pause()
 		binding.chatFromPhoneContainer.visibility = View.VISIBLE
 		binding.chatFromPhoneContainer.apply {
 			alpha = 0f
@@ -1108,12 +1216,12 @@ class VideoPlayerScreen : BaseActivity<VideoPlayerViewModel, ActivityVideoPlayer
 	}
 
 	fun onAllDoneClicked() {
-		binding.videoPlayer.player?.play()
+		player.play()
 		binding.chatFromPhoneContainer.visibility = View.GONE
 	}
 
 	fun onCancelClicked() {
-		binding.videoPlayer.player?.play()
+		player.play()
 		binding.chatFromPhoneContainer.visibility = View.GONE
 	}
 
@@ -1139,7 +1247,9 @@ class VideoPlayerScreen : BaseActivity<VideoPlayerViewModel, ActivityVideoPlayer
 						)
 					} Finishing Activity"
 				)
-				Handler(Looper.getMainLooper()).post(addStatsTask)
+				if (this::statsManagement.isInitialized && this::addStatsTask.isInitialized) {
+					Handler(Looper.getMainLooper()).post(addStatsTask)
+				}
 				releaseVideoPlayer()
 				finish()
 			}
@@ -1171,7 +1281,7 @@ class VideoPlayerScreen : BaseActivity<VideoPlayerViewModel, ActivityVideoPlayer
 				timeout.postDelayed(trickPlayRunnable, (inactivitySeconds * 1000).toLong())
 				if (trickPlayVisible.value != null && !trickPlayVisible.value!!) {
 					trickPlayVisible.value = true
-					if (player.isCurrentMediaItemLive) binding.chatFromPhone.requestFocus() else binding.playPause.requestFocus()
+					if (player.isLive) binding.chatFromPhone.requestFocus() else binding.playPause.requestFocus()
 				}
 				binding.errorContainer.visibility = View.GONE
 			}
@@ -1212,13 +1322,13 @@ class VideoPlayerScreen : BaseActivity<VideoPlayerViewModel, ActivityVideoPlayer
 				timeout.postDelayed(trickPlayRunnable, (inactivitySeconds * 1000).toLong())
 				if (trickPlayVisible.value != null && !trickPlayVisible.value!!) {
 					trickPlayVisible.value = true
-					if (player.isCurrentMediaItemLive) binding.chatFromPhone.requestFocus() else binding.playPause.requestFocus()
+					if (player.isLive) binding.chatFromPhone.requestFocus() else binding.playPause.requestFocus()
 				}
 				binding.errorContainer.visibility = View.GONE
 			}
 
 			else -> {
-				binding.videoPlayer.player?.play()
+				player.play()
 				binding.errorContainer.visibility = View.GONE
 			}
 		}
@@ -1230,6 +1340,7 @@ class VideoPlayerScreen : BaseActivity<VideoPlayerViewModel, ActivityVideoPlayer
 		}
 		releaseVideoPlayer()
 		super.onDestroy()
+		System.gc()
 	}
 
 	override fun onPause() {
@@ -1260,6 +1371,11 @@ class VideoPlayerScreen : BaseActivity<VideoPlayerViewModel, ActivityVideoPlayer
 		)
 	}
 
+	override fun onStop() {
+		binding.videoPlayer.onStop()
+		super.onStop()
+	}
+
 	@SuppressLint("RestrictedApi")
 	override fun dispatchKeyEvent(event: KeyEvent): Boolean {
 		// This method is called on key down and key up, so avoid being called twice
@@ -1286,125 +1402,172 @@ class VideoPlayerScreen : BaseActivity<VideoPlayerViewModel, ActivityVideoPlayer
 				}
 
 				KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE -> {
-					if (!player.isCurrentMediaItemLive) binding.playPause.performClick()
+					if (!player.isLive) binding.playPause.performClick()
 					true
 				}
 
 				KeyEvent.KEYCODE_MEDIA_PLAY -> {
-					if (!player.isCurrentMediaItemLive) binding.videoPlayer.player?.play()
+					if (!player.isLive) player.play()
 					true
 				}
 
 				KeyEvent.KEYCODE_MEDIA_PAUSE -> {
-					if (!player.isCurrentMediaItemLive) binding.videoPlayer.player?.pause()
+					if (!player.isLive) player.pause()
 					true
 				}
 
 				KeyEvent.KEYCODE_MEDIA_STOP -> {
-					if (!player.isCurrentMediaItemLive) binding.videoPlayer.player?.stop()
+					if (!player.isLive) player.onStop()
 					true
 				}
 
 				KeyEvent.KEYCODE_DPAD_LEFT -> {
-					timeout.removeCallbacks(trickPlayRunnable)
-					timeout.postDelayed(trickPlayRunnable, (inactivitySeconds * 1000).toLong())
-					if (trickPlayVisible.value != null && !trickPlayVisible.value!!) {
-						trickPlayVisible.value = true
-						if (!player.isCurrentMediaItemLive) binding.progress.requestFocus() else binding.chatFromPhone.requestFocus()
-						true
-					} else return false
+					if (!isAdAvailable && !isAdVisible) {
+						timeout.removeCallbacks(trickPlayRunnable)
+						timeout.postDelayed(trickPlayRunnable, (inactivitySeconds * 1000).toLong())
+						if (trickPlayVisible.value != null && !trickPlayVisible.value!!) {
+							trickPlayVisible.value = true
+							if (!player.isLive) binding.progress.requestFocus() else binding.chatFromPhone.requestFocus()
+							true
+						} else return false
+					} else true
 				}
 
 				KeyEvent.KEYCODE_MEDIA_REWIND, KeyEvent.KEYCODE_MEDIA_SKIP_BACKWARD, KeyEvent.KEYCODE_MEDIA_STEP_BACKWARD -> {
-					timeout.removeCallbacks(trickPlayRunnable)
-					timeout.postDelayed(trickPlayRunnable, (inactivitySeconds * 1000).toLong())
-					if (trickPlayVisible.value != null && !trickPlayVisible.value!!) {
-						trickPlayVisible.value = true
-						if (!player.isCurrentMediaItemLive) binding.progress.requestFocus() else binding.chatFromPhone.requestFocus()
-						true
-					} else {
-						if (!player.isCurrentMediaItemLive) {
-							if (!binding.progress.isFocused) binding.progress.requestFocus() else {
-								if (this::player.isInitialized && player.isPlaying) {
-									player.pause()
+					if (!isAdAvailable && !isAdVisible) {
+						timeout.removeCallbacks(trickPlayRunnable)
+						timeout.postDelayed(trickPlayRunnable, (inactivitySeconds * 1000).toLong())
+						if (trickPlayVisible.value != null && !trickPlayVisible.value!!) {
+							trickPlayVisible.value = true
+							if (!player.isLive) binding.progress.requestFocus() else binding.chatFromPhone.requestFocus()
+							true
+						} else {
+							if (!player.isLive) {
+								if (!binding.progress.isFocused) binding.progress.requestFocus() else {
+									if (this::player.isInitialized && player.isPlaying) {
+										player.pause()
+									}
+									isScrubVisible = true
+									scrubbedPosition -= 10
+									if (scrubbedPosition < 0) scrubbedPosition = 0
+									binding.progress.setPosition(scrubbedPosition)
+									setImagePreview()
 								}
-								isScrubVisible = true
-								scrubbedPosition -= 10
-								if (scrubbedPosition < 0) scrubbedPosition = 0
-								binding.progress.setPosition(scrubbedPosition)
-								setImagePreview()
 							}
+							return false
 						}
-						return false
+					} else {
+						true
 					}
 				}
 
 				KeyEvent.KEYCODE_DPAD_RIGHT -> {
-					timeout.removeCallbacks(trickPlayRunnable)
-					timeout.postDelayed(trickPlayRunnable, (inactivitySeconds * 1000).toLong())
-					if (trickPlayVisible.value != null && !trickPlayVisible.value!!) {
-						trickPlayVisible.value = true
-						if (!player.isCurrentMediaItemLive) binding.progress.requestFocus() else binding.chatFromPhone.requestFocus()
-						true
-					} else return false
+					if (!isAdAvailable && !isAdVisible) {
+						timeout.removeCallbacks(trickPlayRunnable)
+						timeout.postDelayed(trickPlayRunnable, (inactivitySeconds * 1000).toLong())
+						if (trickPlayVisible.value != null && !trickPlayVisible.value!!) {
+							trickPlayVisible.value = true
+							if (!player.isLive) binding.progress.requestFocus() else binding.chatFromPhone.requestFocus()
+							true
+						} else return false
+					} else true
 				}
 
 				KeyEvent.KEYCODE_MEDIA_FAST_FORWARD, KeyEvent.KEYCODE_MEDIA_SKIP_FORWARD, KeyEvent.KEYCODE_MEDIA_STEP_FORWARD -> {
-					timeout.removeCallbacks(trickPlayRunnable)
-					timeout.postDelayed(trickPlayRunnable, (inactivitySeconds * 1000).toLong())
-					if (trickPlayVisible.value != null && !trickPlayVisible.value!!) {
-						trickPlayVisible.value = true
-						if (!player.isCurrentMediaItemLive) binding.progress.requestFocus() else binding.chatFromPhone.requestFocus()
-						true
-					} else {
-						if (!player.isCurrentMediaItemLive) {
-							if (!binding.progress.isFocused) binding.progress.requestFocus() else {
-								if (this::player.isInitialized && player.isPlaying) {
-									player.pause()
+					if (!isAdAvailable && !isAdVisible) {
+						timeout.removeCallbacks(trickPlayRunnable)
+						timeout.postDelayed(trickPlayRunnable, (inactivitySeconds * 1000).toLong())
+						if (trickPlayVisible.value != null && !trickPlayVisible.value!!) {
+							trickPlayVisible.value = true
+							if (!player.isLive) binding.progress.requestFocus() else binding.chatFromPhone.requestFocus()
+							true
+						} else {
+							if (!player.isLive) {
+								if (!binding.progress.isFocused) binding.progress.requestFocus() else {
+									if (this::player.isInitialized && player.isPlaying) {
+										player.pause()
+									}
+									isScrubVisible = true
+									scrubbedPosition += 10
+									if (scrubbedPosition > player.duration) scrubbedPosition =
+										player.duration.toLong()
+									binding.progress.setPosition(scrubbedPosition)
+									setImagePreview()
 								}
-								isScrubVisible = true
-								scrubbedPosition += 10
-								if (scrubbedPosition > player.duration / IntValue.NUMBER_1000) scrubbedPosition =
-									player.duration / IntValue.NUMBER_1000
-								binding.progress.setPosition(scrubbedPosition)
-								setImagePreview()
 							}
+							return false
 						}
-						return false
-					}
+					} else true
+
 				}
 
 				KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER, KeyEvent.KEYCODE_SPACE -> {
 					// When a key is hit, cancel the timeout of hiding the trick bar and set it again
-					if (!player.isCurrentMediaItemLive && binding.progress.hasFocus()) {
+					if (!player.isLive && binding.progress.hasFocus()) {
 						isScrubVisible = false
 						setImagePreview()
-						player.seekTo(scrubbedPosition * 1000)
-						player.playWhenReady = true
-						binding.playPause.requestFocus()
+						playingPosition = scrubbedPosition
+						resumePlayer(scrubbedPosition)
 						true
 					} else {
 						timeout.removeCallbacks(trickPlayRunnable)
 						timeout.postDelayed(trickPlayRunnable, (inactivitySeconds * 1000).toLong())
 						if (trickPlayVisible.value != null && !trickPlayVisible.value!!) {
 							trickPlayVisible.value = true
-							if (player.isCurrentMediaItemLive) binding.chatFromPhone.requestFocus() else binding.playPause.requestFocus()
+							if (player.isLive) binding.chatFromPhone.requestFocus() else binding.playPause.requestFocus()
 							true
 						} else return false
 					}
+
 				}
 
 				else -> {
-					timeout.removeCallbacks(trickPlayRunnable)
-					timeout.postDelayed(trickPlayRunnable, (inactivitySeconds * 1000).toLong())
-					if (trickPlayVisible.value != null && !trickPlayVisible.value!!) {
-						trickPlayVisible.value = true
-						if (player.isCurrentMediaItemLive) binding.chatFromPhone.requestFocus() else binding.playPause.requestFocus()
-						true
-					} else return false
+					if (!isAdAvailable && !isAdVisible) {
+						timeout.removeCallbacks(trickPlayRunnable)
+						timeout.postDelayed(trickPlayRunnable, (inactivitySeconds * 1000).toLong())
+						if (trickPlayVisible.value != null && !trickPlayVisible.value!!) {
+							trickPlayVisible.value = true
+							if (player.isLive) binding.chatFromPhone.requestFocus() else binding.playPause.requestFocus()
+							true
+						} else return false
+					} else true
 				}
 			}
 		}
 	}
 
+	private fun createPlayerConfig(): PlayerConfig {
+		val playerConfig = PlayerConfig()
+		val playbackConfig = PlaybackConfig()
+		playbackConfig.isAutoplayEnabled = true
+		playerConfig.playbackConfig = playbackConfig
+		if (isAdAvailable) {
+			val advertisingConfig = AdvertisingConfig(adItems)
+			playerConfig.advertisingConfig = advertisingConfig
+		}
+		return playerConfig
+	}
+
+	private fun getPlayerProgress() {
+		val currentPosition = player.currentTime
+		val totalDuration = player.duration
+		if (player.isPlaying) scrubbedPosition = currentPosition.toLong()
+		setImagePreview()
+		binding.progress.setDuration(totalDuration.toLong())
+		binding.progress.setPosition(currentPosition.toLong())
+		val currentDuration =
+			PeriodFormatterBuilder().printZeroAlways().minimumPrintedDigits(2).appendHours()
+				.appendSeparator(":").printZeroAlways().minimumPrintedDigits(2).appendMinutes()
+				.appendSeparator(":").printZeroAlways().minimumPrintedDigits(2).appendSeconds()
+				.toFormatter().print(
+					Period.seconds((totalDuration - currentPosition).toInt()).normalizedStandard()
+				)
+		binding.currentDuration.text = currentDuration ?: "00:00:00"
+		if (player.isPlaying) {
+			binding.videoPlayer.postDelayed(
+				{ getPlayerProgress() },
+				if (isAdAvailable && isAdVisible) IntValue.NUMBER_500.toLong() else IntValue.NUMBER_1000.toLong()
+			)
+		}
+	}
 }

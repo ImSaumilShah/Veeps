@@ -37,6 +37,12 @@ object AppConstants {
 	const val userDisplayName: String = "user_display_name"
 	const val userAvatar: String = "user_avatar"
 	const val userTimeZoneAbbr: String = "user_time_zone_abbr"
+	const val drmLicenseURL = "https://widevine-dash.ezdrm.com/proxy?pX=72D27A"
+	const val reservedId = "reservedId"
+	const val receiptId = "receiptId"
+	const val orderId = "orderId"
+	const val requestId = "requestId"
+	const val SKUId = "SKUId"
 }
 
 object Image {
@@ -66,6 +72,8 @@ object CardTypes {
 	const val WIDE = "wide"
 	const val CIRCLE = "circle"
 	const val STANDARD = "standard"
+	const val CHART = "chart"
+	const val LANDSCAPE = "landscape"
 	const val PORTRAIT = "portrait"
 	const val HERO = "hero"
 	const val GENRE = "genre"
@@ -77,6 +85,7 @@ object IntValue {
 	const val NUMBER_5 = 5
 	const val NUMBER_8 = 8
 	const val NUMBER_10 = 10
+	const val NUMBER_LANDSCAPE = 9
 	const val NUMBER_100 = 100
 	const val NUMBER_200 = 200
 	const val NUMBER_300 = 300
@@ -85,6 +94,7 @@ object IntValue {
 	const val NUMBER_1000 = 1000
 	const val NUMBER_2000 = 2000
 	const val NUMBER_5000 = 5000
+	const val NUMBER_15000 = 15000
 }
 
 object PollingStatus {
@@ -96,7 +106,9 @@ object PollingStatus {
 object DEFAULT {
 	const val EMPTY_STRING = ""
 	const val EMPTY_INT = 0
+	const val DOUBLE_VALUE = 0.0
 	const val SEPARATOR = " · "
+	const val DEFAULT_INT_STRING = "0"
 }
 
 object ContentBadgeValues {
@@ -153,12 +165,28 @@ object Screens {
 	const val EXIT_APP = "EXIT_APP"
 	const val PLAYER_ERROR = "PLAYER_ERROR"
 	const val STREAM_END = "STREAM_END"
+	const val APP_UPDATE = "APP_UPDATE"
+	const val SUBSCRIPTION = "SUBSCRIPTION"
+	const val GENRE = "GENRE"
+}
+
+object PurchaseResponseStatus {
+	const val NONE = "NONE"
+	const val SUCCESS = "SUCCESS"
+	const val SUCCESS_WITH_PENDING_PURCHASE = "SUCCESS_WITH_PENDING_PURCHASE"
+	const val FAILED = "FAILED"
+	const val INVALID_SKU = "INVALID_SKU"
+	const val ALREADY_PURCHASED = "ALREADY_PURCHASED"
+	const val NOT_SUPPORTED = "NOT_SUPPORTED"
+	const val PENDING = "PENDING"
+	const val CANCELLED_BY_VEEPS = "CANCELLED_BY_VEEPS"
 }
 
 object EntityTypes {
 	const val EVENT = "event"
 	const val ARTIST = "artist"
 	const val VENUE = "venue"
+	const val GENRES = "genre"
 }
 
 object EventTypes {
@@ -199,7 +227,9 @@ object EventAccessType {
 	const val VEEPS_PLUS = "VEEPS_PLUS"
 	const val PAID = "PAID"
 	const val FREE = "FREE"
-	const val NONE = ""
+	const val VEEPS_FREE = "VEEPS_FREE"
+	const val NONE = "none"
+	const val VEEPS_PARTNER = "veeps_partner"
 }
 
 object ButtonLabels {
@@ -220,4 +250,54 @@ object DateTimeCompareDifference {
 	const val LESS_THAN = "less than"
 	const val EQUALS = "equals"
 	const val NOTHING = "NOTHING"
+}
+
+object UserType {
+	const val VEEPS_PAID_SUBSCRIBER = "m"
+	const val VEEPS_TICKETS_HOLDER = "b"
+	const val VEEPS_FREE_TIER = "f"
+}
+
+object SubscriptionPlanSKUs {
+	const val VEEPS_ALL_ACCESS_SUBSCRIPTION = "VP-ALL-ACCESS"
+	const val VEEPS_MONTHLY_SUBSCRIPTION = "VP-M-US"
+	const val VEEPS_YEARLY_SUBSCRIPTION = "VP-Y-US"
+	const val MONTHLY_SUBSCRIPTION = "VP-M-77-US"
+	const val MONTHLY_TERM_SUBSCRIPTION = "Monthly"
+	const val YEARLY_SUBSCRIPTION = "VP-Y-89-US"
+	const val YEARLY_TERM_SUBSCRIPTION = "Annually"
+}
+
+object PurchaseType {
+	const val SUBSCRIPTION = "SUBSCRIPTION"
+	const val ONE_TIME_PURCHASE = "ONE_TIME_PURCHASE"
+}
+object SubscriptionPlanDetails {
+	const val MONTHLY_PLAN_NAME = "Monthly"
+	const val YEARLY_PLAN_NAME = "Yearly"
+	const val MONTHLY_PLAN_PRICE = "$11.99"
+	const val YEARLY_PLAN_PRICE = "$120"
+	const val PLAN_BENEFIT_ONE = "See every live show and rewatch for longer"
+	const val PLAN_BENEFIT_TWO = "Enjoy 3,000 hours of on-demand shows"
+	const val PLAN_BENEFIT_THREE = "Unlock exclusive content from your favorite artists"
+	const val PLAN_BENEFIT_FOUR = "Stream on your browser, Apple TV, Roku, iOS, Fire TV, Samsung and Android"
+}
+
+object MarketPlace {
+	const val US = "US"
+}
+
+object GenreName {
+	const val COMEDY = "Comedy"
+	const val COUNTRY = "Country"
+	const val INDIE = "Indie"
+	const val POP = "Pop"
+	const val K_POP = "K-Pop"
+	const val RAP = "Rap"
+	const val FOLK = "Folk"
+	const val ROCK = "Rock"
+	const val ALTERNATIVE = "Alternative"
+	const val METAL = "Metal"
+	const val JAZZ = "Jazz"
+	const val R_AND_B = "R&B"
 }

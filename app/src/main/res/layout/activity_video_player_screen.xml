@@ -47,7 +47,7 @@
             <include layout="@layout/guidelines" />
 
             <!-- Video Player -->
-            <androidx.media3.ui.PlayerView
+            <com.bitmovin.player.PlayerView
                 android:id="@+id/video_player"
                 android:layout_width="0dp"
                 android:layout_height="match_parent"
@@ -59,10 +59,26 @@
                 app:layout_constraintStart_toStartOf="parent"
                 app:layout_constraintTop_toTopOf="parent"
                 app:resize_mode="fit"
-                app:show_buffering="never"
+                app:ad_marker_color="@color/red"
+                app:ad_marker_width="3dp"
+                app:bar_gravity="center"
+                app:bar_height="50dp"
+                app:buffered_color="@color/white_50"
+                app:playback_isAutoPlay="true"
+                app:unplayed_color="@color/white_10"
+                app:time_bar_min_update_interval="1000"
+                app:show_vr_button="false"
+                app:show_shuffle_button="false"
+                app:played_ad_marker_color="@color/red_30"
+                app:played_color="@color/white_90"
+                app:hide_during_ads="true"
+                app:show_buffering="always"
                 app:show_subtitle_button="true"
                 app:use_artwork="true"
-                app:use_controller="false" />
+                app:use_controller="false"
+                android:keepScreenOn="true"
+                app:initialize_player="true"
+                />
 
             <ImageView
                 android:id="@+id/stand_by"

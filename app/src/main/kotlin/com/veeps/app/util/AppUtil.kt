@@ -369,7 +369,8 @@ object AppUtil {
 				entity.subscriberAccessEndsAt, DateTimeZone.UTC
 			).withZone(DateTimeZone.getDefault()).toDateTime()
 		val subscriberAccessEndsAtString = subscriberAccessEndsAt.toString("MMM d yyyy")
-		val reWatchDuration = entity.eventReWatchDuration!!.ifBlank { "0" }.toInt()
+		val reWatchDuration = (entity.eventReWatchDuration?.ifBlank { DEFAULT.DEFAULT_INT_STRING }
+			?: DEFAULT.DEFAULT_INT_STRING).toInt()
 		val reWatchDurationString = calculateReWatchTime(reWatchDuration)
 
 		entity.access.replaceAll(String::lowercase)
@@ -381,6 +382,8 @@ object AppUtil {
 			EventAccessType.PAID
 		} else if (entity.access.contains("free")) {
 			EventAccessType.FREE
+		} else if (entity.access.contains("veeps_free")) {
+			EventAccessType.VEEPS_FREE
 		} else EventAccessType.NONE
 
 		if (entity.eventReWatchDuration.isNullOrBlank()) {
@@ -440,6 +443,8 @@ object AppUtil {
 			EventAccessType.PAID
 		} else if (entity.access.contains("free")) {
 			EventAccessType.FREE
+		} else if (entity.access.contains("veeps_free")) {
+			EventAccessType.VEEPS_FREE
 		} else EventAccessType.NONE
 		val streamStartsAtDate =
 			DateTime(streamStartAt, DateTimeZone.UTC).withZone(DateTimeZone.getDefault())
@@ -449,9 +454,7 @@ object AppUtil {
 		return when (onSaleStatus) {
 			"free_livestream" -> {
 				if (screen == Screens.BROWSE) {
-					if (isEventStarted) ButtonLabels.GET_TICKETS
-					else if (isUserSubscribed) ButtonLabels.GO_TO_EVENT
-					else ButtonLabels.GET_TICKETS
+					ButtonLabels.GO_TO_EVENT
 				} else {
 					if (isUserSubscribed || isEventPurchased) {
 						if (isEventStarted) {
@@ -467,8 +470,7 @@ object AppUtil {
 
 			"free_ondemand" -> {
 				if (screen == Screens.BROWSE) {
-					if (isUserSubscribed) ButtonLabels.GO_TO_EVENT
-					else ButtonLabels.GET_TICKETS
+					ButtonLabels.GO_TO_EVENT
 				} else {
 					if (isUserSubscribed || isEventPurchased) {
 						if (isEventStarted) {
@@ -482,8 +484,20 @@ object AppUtil {
 				}
 			}
 
-			"off_sale_livestream" -> ButtonLabels.UNAVAILABLE
-			"off_sale_ondemand" -> ButtonLabels.UNAVAILABLE
+			"off_sale_livestream" -> {
+				when (userEventAccess) {
+					EventAccessType.VEEPS_FREE -> ButtonLabels.JOIN
+					else -> ButtonLabels.UNAVAILABLE
+				}
+			}
+
+			"off_sale_ondemand" -> {
+				when (userEventAccess) {
+					EventAccessType.VEEPS_FREE -> ButtonLabels.PLAY
+					else -> ButtonLabels.UNAVAILABLE
+				}
+			}
+
 			"on_sale_livestream" -> {
 				if (screen == Screens.BROWSE) {
 					if (isEventStarted) {
@@ -499,28 +513,32 @@ object AppUtil {
 						}
 					} else {
 						if (isUserSubscribed) when (userEventAccess) {
-							EventAccessType.VEEPS_PLUS_PAID, EventAccessType.VEEPS_PLUS, EventAccessType.FREE -> ButtonLabels.GO_TO_EVENT
-							EventAccessType.PAID -> ButtonLabels.GET_TICKETS
+							EventAccessType.VEEPS_PLUS_PAID, EventAccessType.VEEPS_PLUS, EventAccessType.FREE, EventAccessType.PAID -> ButtonLabels.GO_TO_EVENT
 							else -> ButtonLabels.UNAVAILABLE
 						}
 						else when (userEventAccess) {
-							EventAccessType.VEEPS_PLUS_PAID, EventAccessType.PAID, EventAccessType.FREE -> ButtonLabels.GET_TICKETS
+							EventAccessType.VEEPS_PLUS_PAID, EventAccessType.PAID, EventAccessType.FREE -> ButtonLabels.GO_TO_EVENT
 							EventAccessType.VEEPS_PLUS -> ButtonLabels.UNAVAILABLE
 							else -> ButtonLabels.UNAVAILABLE
 						}
 					}
 				} else {
-					if (isEventPurchased) {
-						if (isEventStarted) {
+					when (userEventAccess) {
+						EventAccessType.VEEPS_FREE -> if (isEventStarted)
 							ButtonLabels.JOIN_LIVE
+						else ButtonLabels.JOIN
+						else -> if (isEventPurchased) {
+							if (isEventStarted) {
+								ButtonLabels.JOIN_LIVE
+							} else {
+								ButtonLabels.JOIN
+							}
 						} else {
-							ButtonLabels.JOIN
-						}
-					} else {
-						if (userEventAccess == EventAccessType.PAID || userEventAccess == EventAccessType.VEEPS_PLUS_PAID) {
-							ButtonLabels.BUY_TICKET
-						} else {
-							ButtonLabels.UNAVAILABLE
+							if (userEventAccess == EventAccessType.PAID || userEventAccess == EventAccessType.VEEPS_PLUS_PAID) {
+								ButtonLabels.BUY_TICKET
+							} else {
+								ButtonLabels.UNAVAILABLE
+							}
 						}
 					}
 				}
@@ -529,17 +547,18 @@ object AppUtil {
 			"on_sale_ondemand" -> {
 				if (screen == Screens.BROWSE) {
 					if (isUserSubscribed) when (userEventAccess) {
-						EventAccessType.VEEPS_PLUS_PAID, EventAccessType.VEEPS_PLUS, EventAccessType.FREE -> ButtonLabels.GO_TO_EVENT
-						EventAccessType.PAID -> ButtonLabels.GET_TICKETS
+						EventAccessType.VEEPS_PLUS_PAID, EventAccessType.VEEPS_PLUS, EventAccessType.FREE, EventAccessType.PAID -> ButtonLabels.GO_TO_EVENT
 						else -> ButtonLabels.UNAVAILABLE
 					}
 					else when (userEventAccess) {
-						EventAccessType.VEEPS_PLUS_PAID, EventAccessType.PAID, EventAccessType.FREE -> ButtonLabels.GET_TICKETS
+						EventAccessType.VEEPS_PLUS_PAID, EventAccessType.PAID, EventAccessType.FREE -> ButtonLabels.GO_TO_EVENT
 						EventAccessType.VEEPS_PLUS -> ButtonLabels.UNAVAILABLE
 						else -> ButtonLabels.UNAVAILABLE
 					}
 				} else {
-					if (isEventPurchased) {
+					if (userEventAccess == EventAccessType.VEEPS_FREE)
+						ButtonLabels.PLAY
+					else if (isEventPurchased) {
 						if (isEventStarted) {
 							ButtonLabels.PLAY
 						} else {
@@ -559,54 +578,58 @@ object AppUtil {
 				if (screen == Screens.BROWSE) {
 					if (isEventStarted) {
 						if (isUserSubscribed) when (userEventAccess) {
-							EventAccessType.VEEPS_PLUS_PAID, EventAccessType.VEEPS_PLUS, EventAccessType.FREE -> ButtonLabels.GO_TO_EVENT
-							EventAccessType.PAID -> ButtonLabels.GET_TICKETS
+							EventAccessType.VEEPS_PLUS_PAID, EventAccessType.VEEPS_PLUS, EventAccessType.FREE, EventAccessType.PAID -> ButtonLabels.GO_TO_EVENT
 							else -> ButtonLabels.UNAVAILABLE
 						}
 						else when (userEventAccess) {
-							EventAccessType.VEEPS_PLUS_PAID, EventAccessType.PAID, EventAccessType.FREE -> ButtonLabels.GET_TICKETS
+							EventAccessType.VEEPS_PLUS_PAID, EventAccessType.PAID, EventAccessType.FREE -> ButtonLabels.GO_TO_EVENT
 							EventAccessType.VEEPS_PLUS -> ButtonLabels.UNAVAILABLE
 							else -> ButtonLabels.UNAVAILABLE
 						}
 					} else {
 						if (isUserSubscribed) when (userEventAccess) {
-							EventAccessType.VEEPS_PLUS_PAID, EventAccessType.VEEPS_PLUS, EventAccessType.FREE -> ButtonLabels.GO_TO_EVENT
-							EventAccessType.PAID -> ButtonLabels.GET_TICKETS
+							EventAccessType.VEEPS_PLUS_PAID, EventAccessType.VEEPS_PLUS, EventAccessType.FREE, EventAccessType.PAID -> ButtonLabels.GO_TO_EVENT
 							else -> ButtonLabels.UNAVAILABLE
 						}
 						else when (userEventAccess) {
-							EventAccessType.VEEPS_PLUS_PAID, EventAccessType.PAID, EventAccessType.FREE -> ButtonLabels.GET_TICKETS
+							EventAccessType.VEEPS_PLUS_PAID, EventAccessType.PAID, EventAccessType.FREE -> ButtonLabels.GO_TO_EVENT
 							EventAccessType.VEEPS_PLUS -> ButtonLabels.UNAVAILABLE
 							else -> ButtonLabels.UNAVAILABLE
 						}
 					}
 				} else {
-					if (isUserSubscribed || isEventPurchased) {
-						if (isEventStarted) {
+					when (userEventAccess) {
+						EventAccessType.VEEPS_FREE -> if (isEventStarted)
 							ButtonLabels.JOIN_LIVE
+						else ButtonLabels.JOIN
+						else -> if (isUserSubscribed || isEventPurchased) {
+							if (isEventStarted) {
+								ButtonLabels.JOIN_LIVE
+							} else {
+								ButtonLabels.JOIN
+							}
 						} else {
-							ButtonLabels.JOIN
+							ButtonLabels.UNAVAILABLE
 						}
-					} else {
-						ButtonLabels.UNAVAILABLE
+					}
 					}
 				}
-			}
 
 			"protected_ondemand" -> {
 				if (screen == Screens.BROWSE) {
 					if (isUserSubscribed) when (userEventAccess) {
-						EventAccessType.VEEPS_PLUS_PAID, EventAccessType.VEEPS_PLUS, EventAccessType.FREE -> ButtonLabels.GO_TO_EVENT
-						EventAccessType.PAID -> ButtonLabels.GET_TICKETS
+						EventAccessType.VEEPS_PLUS_PAID, EventAccessType.VEEPS_PLUS, EventAccessType.FREE, EventAccessType.PAID -> ButtonLabels.GO_TO_EVENT
 						else -> ButtonLabels.UNAVAILABLE
 					}
 					else when (userEventAccess) {
-						EventAccessType.VEEPS_PLUS_PAID, EventAccessType.PAID, EventAccessType.FREE -> ButtonLabels.GET_TICKETS
+						EventAccessType.VEEPS_PLUS_PAID, EventAccessType.PAID, EventAccessType.FREE -> ButtonLabels.GO_TO_EVENT
 						EventAccessType.VEEPS_PLUS -> ButtonLabels.UNAVAILABLE
 						else -> ButtonLabels.UNAVAILABLE
 					}
 				} else {
-					if (isUserSubscribed || isEventPurchased) {
+					if (userEventAccess == EventAccessType.VEEPS_FREE)
+						ButtonLabels.PLAY
+					else if (isUserSubscribed || isEventPurchased) {
 						if (isEventStarted) {
 							ButtonLabels.PLAY
 						} else {
@@ -636,14 +659,19 @@ object AppUtil {
 						else ButtonLabels.UNAVAILABLE
 					}
 				} else {
-					if (isUserSubscribed) {
-						if (isEventStarted) {
+					when (userEventAccess) {
+						EventAccessType.VEEPS_FREE -> if (isEventStarted)
 							ButtonLabels.JOIN_LIVE
+						else ButtonLabels.JOIN
+						else -> if (isUserSubscribed) {
+							if (isEventStarted) {
+								ButtonLabels.JOIN_LIVE
+							} else {
+								ButtonLabels.JOIN
+							}
 						} else {
-							ButtonLabels.JOIN
+							ButtonLabels.UNAVAILABLE
 						}
-					} else {
-						ButtonLabels.UNAVAILABLE
 					}
 				}
 			}
@@ -657,7 +685,9 @@ object AppUtil {
 					}
 					else ButtonLabels.UNAVAILABLE
 				} else {
-					if (isUserSubscribed) {
+					if (userEventAccess == EventAccessType.VEEPS_FREE)
+						ButtonLabels.PLAY
+					else if (isUserSubscribed) {
 						if (isEventStarted) {
 							ButtonLabels.PLAY
 						} else {
@@ -673,8 +703,7 @@ object AppUtil {
 				if (screen == Screens.BROWSE) {
 					if (isEventStarted) {
 						if (isUserSubscribed) when (userEventAccess) {
-							EventAccessType.VEEPS_PLUS_PAID, EventAccessType.VEEPS_PLUS, EventAccessType.FREE -> ButtonLabels.GO_TO_EVENT
-							EventAccessType.PAID -> ButtonLabels.GET_TICKETS
+							EventAccessType.VEEPS_PLUS_PAID, EventAccessType.VEEPS_PLUS, EventAccessType.FREE, EventAccessType.PAID -> ButtonLabels.GO_TO_EVENT
 							else -> ButtonLabels.UNAVAILABLE
 						}
 						else when (userEventAccess) {
@@ -684,28 +713,32 @@ object AppUtil {
 						}
 					} else {
 						if (isUserSubscribed) when (userEventAccess) {
-							EventAccessType.VEEPS_PLUS_PAID, EventAccessType.VEEPS_PLUS, EventAccessType.FREE -> ButtonLabels.GO_TO_EVENT
-							EventAccessType.PAID -> ButtonLabels.GET_TICKETS
+							EventAccessType.VEEPS_PLUS_PAID, EventAccessType.VEEPS_PLUS, EventAccessType.FREE, EventAccessType.PAID -> ButtonLabels.GO_TO_EVENT
 							else -> ButtonLabels.UNAVAILABLE
 						}
 						else when (userEventAccess) {
-							EventAccessType.VEEPS_PLUS_PAID, EventAccessType.PAID, EventAccessType.FREE -> ButtonLabels.GET_TICKETS
+							EventAccessType.VEEPS_PLUS_PAID, EventAccessType.PAID, EventAccessType.FREE -> ButtonLabels.GO_TO_EVENT
 							EventAccessType.VEEPS_PLUS -> ButtonLabels.UNAVAILABLE
 							else -> ButtonLabels.UNAVAILABLE
 						}
 					}
 				} else {
-					if (isUserSubscribed || isEventPurchased) {
-						if (isEventStarted) {
+					when (userEventAccess) {
+						EventAccessType.VEEPS_FREE -> if (isEventStarted)
 							ButtonLabels.JOIN_LIVE
+						else ButtonLabels.JOIN
+						else -> if (isUserSubscribed || isEventPurchased) {
+							if (isEventStarted) {
+								ButtonLabels.JOIN_LIVE
+							} else {
+								ButtonLabels.JOIN
+							}
 						} else {
-							ButtonLabels.JOIN
-						}
-					} else {
-						if (userEventAccess == EventAccessType.PAID || userEventAccess == EventAccessType.VEEPS_PLUS_PAID) {
-							ButtonLabels.BUY_TICKET
-						} else {
-							ButtonLabels.UNAVAILABLE
+							if (userEventAccess == EventAccessType.PAID || userEventAccess == EventAccessType.VEEPS_PLUS_PAID) {
+								ButtonLabels.BUY_TICKET
+							} else {
+								ButtonLabels.UNAVAILABLE
+							}
 						}
 					}
 				}
@@ -714,8 +747,7 @@ object AppUtil {
 			"sub_ondemand" -> {
 				if (screen == Screens.BROWSE) {
 					if (isUserSubscribed) when (userEventAccess) {
-						EventAccessType.VEEPS_PLUS_PAID, EventAccessType.VEEPS_PLUS, EventAccessType.FREE -> ButtonLabels.GO_TO_EVENT
-						EventAccessType.PAID -> ButtonLabels.GET_TICKETS
+						EventAccessType.VEEPS_PLUS_PAID, EventAccessType.VEEPS_PLUS, EventAccessType.FREE, EventAccessType.PAID -> ButtonLabels.GO_TO_EVENT
 						else -> ButtonLabels.UNAVAILABLE
 					}
 					else when (userEventAccess) {
@@ -724,7 +756,9 @@ object AppUtil {
 						else -> ButtonLabels.UNAVAILABLE
 					}
 				} else {
-					if (isUserSubscribed || isEventPurchased) {
+					if (userEventAccess == EventAccessType.VEEPS_FREE)
+						ButtonLabels.PLAY
+					else if (isUserSubscribed || isEventPurchased) {
 						if (isEventStarted) {
 							ButtonLabels.PLAY
 						} else {
@@ -753,7 +787,9 @@ object AppUtil {
 						else -> ButtonLabels.UNAVAILABLE
 					}
 				} else {
-					if (isUserSubscribed) {
+					if (userEventAccess == EventAccessType.VEEPS_FREE)
+						ButtonLabels.JOIN
+					else if (isUserSubscribed) {
 						if (isEventStarted) {
 							ButtonLabels.JOIN_LIVE
 						} else {
@@ -778,7 +814,9 @@ object AppUtil {
 						else -> ButtonLabels.UNAVAILABLE
 					}
 				} else {
-					if (isUserSubscribed) {
+					if (userEventAccess == EventAccessType.VEEPS_FREE)
+						ButtonLabels.PLAY
+					else if (isUserSubscribed) {
 						if (isEventStarted) {
 							ButtonLabels.PLAY
 						} else {
@@ -792,11 +830,52 @@ object AppUtil {
 
 			else -> {
 				if (screen == Screens.BROWSE) {
-					ButtonLabels.GET_TICKETS
+					ButtonLabels.GO_TO_EVENT
 				} else {
 					ButtonLabels.UNAVAILABLE
 				}
 			}
+		}
+	}
+
+	fun getUserType(entity: Entities): String {
+		return when (AppPreferences.get(
+			AppConstants.userSubscriptionStatus, "none"
+		)) {
+			EventAccessType.VEEPS_PARTNER -> {
+				UserType.VEEPS_PAID_SUBSCRIBER
+			}
+
+			else -> {
+				if (entity.access.contains("veeps_free")) {
+					UserType.VEEPS_FREE_TIER
+				} else {
+					UserType.VEEPS_TICKETS_HOLDER
+				}
+			}
+		}
+	}
+
+	fun isEventStarted(streamStartAt: String): Boolean {
+		return compare(DateTime(streamStartAt, DateTimeZone.UTC).withZone(DateTimeZone.getDefault())
+			.toDateTime(), DateTime.now()) != DateTimeCompareDifference.GREATER_THAN
+	}
+
+	fun getGenreCardColor(genreName: String): Int {
+		return when (genreName) {
+			GenreName.COMEDY -> R.color.comedy
+			GenreName.COUNTRY -> R.color.country
+			GenreName.INDIE -> R.color.indie
+			GenreName.POP -> R.color.pop
+			GenreName.K_POP -> R.color.kpop
+			GenreName.RAP -> R.color.rap
+			GenreName.FOLK -> R.color.folk
+			GenreName.ROCK -> R.color.rock
+			GenreName.ALTERNATIVE -> R.color.alternative
+			GenreName.METAL -> R.color.metal
+			GenreName.JAZZ -> R.color.jazz
+			GenreName.R_AND_B -> R.color.rnb
+			else -> R.color.alternative
 		}
 	}
 }

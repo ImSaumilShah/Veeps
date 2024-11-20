@@ -219,6 +219,7 @@ fun ImageView.loadImage(resource: Any, tag: Any) {
 					val newResource = resource.replace(Image.DEFAULT, Image.LOGO)
 					Glide.with(this@loadImage.context).load(newResource)
 						.diskCacheStrategy(DiskCacheStrategy.ALL)
+						.override(measuredWidth, measuredHeight)
 						.transition(withCrossFade()).error(R.drawable.background_transparent)
 						.into(this@loadImage)
 					Logger.printMessage("Logo Image url with optimized ($newResource) is requested to load.")

@@ -23,6 +23,10 @@ import com.veeps.app.util.AppPreferences
 import com.veeps.app.util.DEFAULT
 import com.veeps.app.util.ImageTags
 import com.veeps.app.util.IntValue
+import com.veeps.app.widget.navigationMenu.NavigationItems.NO_MENU
+import com.veeps.app.widget.navigationMenu.NavigationItems.defaultResource
+import com.veeps.app.widget.navigationMenu.NavigationItems.imageFilledResources
+import com.veeps.app.widget.navigationMenu.NavigationItems.imageNonFilledResources
 
 class NavigationMenu : LinearLayout {
 
@@ -60,7 +64,7 @@ class NavigationMenu : LinearLayout {
 		val profileImageLabel = profile.findViewById<TextView>(R.id.image_label)
 		val profileLabel = profile.findViewById<TextView>(R.id.label)
 		if (AppPreferences.get(AppConstants.userAvatar, DEFAULT.EMPTY_STRING).isNullOrBlank()) {
-			profileImage.loadImage(R.drawable.menu_image_background, ImageTags.AVATAR)
+			profileImage.loadImage(R.drawable.menu_image_background_active, ImageTags.AVATAR)
 			profileImage.imageTintList = ColorStateList.valueOf(
 				ContextCompat.getColor(
 					context, R.color.white
@@ -96,21 +100,21 @@ class NavigationMenu : LinearLayout {
 		}
 		addView(browse)
 
-		val search = this.inflate(R.layout.menu_item)
-		search.tag = NavigationItems.SEARCH
-		search.id = NavigationItems.SEARCH_MENU
-		val searchImage = search.findViewById<ImageView>(R.id.image)
-		val searchLabel = search.findViewById<TextView>(R.id.label)
-		searchImage.setImageResource(R.drawable.search)
-		searchImage.imageTintList = ColorStateList.valueOf(
+		val liveTv = this.inflate(R.layout.menu_item)
+		liveTv.tag = NavigationItems.LIVE_TV
+		liveTv.id = NavigationItems.LIVE_TV_MENU
+		val liveTvImage = liveTv.findViewById<ImageView>(R.id.image)
+		val liveTvLabel = liveTv.findViewById<TextView>(R.id.label)
+		liveTvImage.setImageResource(R.drawable.live_tv)
+		liveTvImage.imageTintList = ColorStateList.valueOf(
 			ContextCompat.getColor(
 				context, R.color.white
 			)
 		)
-		search.setOnClickListener {
-			navigationItem!!.select(NavigationItems.SEARCH_MENU)
+		liveTv.setOnClickListener {
+			navigationItem!!.select(NavigationItems.LIVE_TV_MENU)
 		}
-		addView(search)
+		addView(liveTv)
 
 		val myShows = this.inflate(R.layout.menu_item)
 		myShows.tag = NavigationItems.MY_SHOWS
@@ -128,117 +132,97 @@ class NavigationMenu : LinearLayout {
 		}
 		addView(myShows)
 
+		val search = this.inflate(R.layout.menu_item)
+		search.tag = NavigationItems.SEARCH
+		search.id = NavigationItems.SEARCH_MENU
+		val searchImage = search.findViewById<ImageView>(R.id.image)
+		val searchLabel = search.findViewById<TextView>(R.id.label)
+		searchImage.setImageResource(R.drawable.search)
+		searchImage.imageTintList = ColorStateList.valueOf(
+			ContextCompat.getColor(
+				context, R.color.white
+			)
+		)
+		search.setOnClickListener {
+			navigationItem!!.select(NavigationItems.SEARCH_MENU)
+		}
+		addView(search)
+
 	}
 
 	private fun focusCurrentSelectedNavigationMenu() {
-		getChildAt(currentSelectedItem).requestFocus()
+		var currentSelected = currentSelectedItem
+
+		// If no menu is selected, default to BROWSE_MENU
+		if (currentSelected == NavigationItems.NO_MENU) currentSelected =
+			NavigationItems.BROWSE_MENU
+
+		// Ensure the currentSelected index is within bounds
+		if (currentSelected in 0 until childCount) {
+			getChildAt(currentSelected).requestFocus()
+		} else {
+			// handle cases where currentSelected is invalid
+			clearFocus()
+		}
 	}
 
-	private fun highlightCurrentSelectedNavigationMenu(isExpanded: Boolean) {
-		for (position in 0 until childCount) {
-			(getChildAt(position).findViewById<View>(R.id.label) as TextView).setTextColor(
-				ContextCompat.getColor(
-					context,
-					if (isExpanded && getChildAt(position).hasFocus()) R.color.black else R.color.white
-				)
-			)
-			if (position == 0) {
-				if (AppPreferences.get(AppConstants.userAvatar, DEFAULT.EMPTY_STRING)
-						.isNullOrBlank()
-				) {
-					(getChildAt(position).findViewById<View>(R.id.image) as ImageView).imageTintList =
-						ColorStateList.valueOf(
-							ContextCompat.getColor(
-								context,
-								if (isExpanded && getChildAt(position).hasFocus()) R.color.black else R.color.white
-							)
-						)
-					(getChildAt(position).findViewById<View>(R.id.image_label) as TextView).setTextColor(
-						ContextCompat.getColor(
-							context,
-							if (isExpanded && getChildAt(position).hasFocus()) R.color.black else R.color.white
-						)
-					)
-				}
+	private fun updateMenuItemColors(view: View, position: Int, isExpanded: Boolean) {
+		val avatar = AppPreferences.get(AppConstants.userAvatar, DEFAULT.EMPTY_STRING)
+		val isAvatarMissing = avatar.isNullOrBlank()
+
+		// Pre-cache colors for reuse
+		val colorBlack = ContextCompat.getColor(view.context, R.color.black)
+		val colorWhite = ContextCompat.getColor(view.context, R.color.white)
+		val colorWhite50 = ContextCompat.getColor(view.context, R.color.white_50)
+		val colorBlack10 = ContextCompat.getColor(view.context, R.color.black_10)
+		val colorWhite10 = ContextCompat.getColor(view.context, R.color.white_10)
+
+		val labelView = view.findViewById<TextView>(R.id.label)
+		val imageView = view.findViewById<ImageView>(R.id.image)
+		val hasFocus = view.hasFocus()
+
+		val isCurrentItem = if (currentSelectedItem == NO_MENU) false else position == currentSelectedItem
+		val isFirstItem = position == 0
+
+		if (!isFirstItem) {
+			val imageResource = if (isCurrentItem) {
+				imageFilledResources.getOrNull(position) ?: defaultResource
 			} else {
-				(getChildAt(position).findViewById<View>(R.id.image) as ImageView).imageTintList =
-					ColorStateList.valueOf(
-						ContextCompat.getColor(
-							context,
-							if (!isExpanded && position != currentSelectedItem) R.color.white_50 else if (isExpanded && getChildAt(
-									position
-								).hasFocus()
-							) R.color.black else R.color.white
-						)
-					)
+				imageNonFilledResources.getOrNull(position) ?: defaultResource
 			}
-		}
-	}
 
-	private fun removeHighlightCurrentSelectedNavigationMenu() {
-		(getChildAt(currentSelectedItem).findViewById<View>(R.id.label) as TextView).setTextColor(
-			ContextCompat.getColor(
-				context, R.color.white
+			imageResource.let { imageView.setImageResource(it) }
+		}
+
+		// Determine the text color
+		val textColor = when {
+			isExpanded && isCurrentItem && !hasFocus -> colorWhite
+			isExpanded && hasFocus -> colorBlack
+			isExpanded -> colorWhite50
+			isCurrentItem -> colorWhite
+			else -> colorWhite50
+		}
+		labelView.setTextColor(textColor)
+
+		// Determine the image tint color
+		val imageTintColor = when {
+			isExpanded && isFirstItem && isAvatarMissing && hasFocus -> colorBlack10
+			isFirstItem && isAvatarMissing -> colorWhite10
+			isExpanded && isCurrentItem && hasFocus -> colorBlack
+			isExpanded && isCurrentItem -> colorWhite
+			isExpanded && hasFocus -> colorBlack
+			isExpanded -> colorWhite50
+			isCurrentItem -> colorWhite
+			else -> colorWhite50
+		}
+		if (!isFirstItem || isAvatarMissing) imageView.imageTintList = ColorStateList.valueOf(imageTintColor)
+
+		// Handle image label for the first item when the avatar is missing
+		if (isExpanded && isFirstItem && isAvatarMissing) {
+			view.findViewById<TextView>(R.id.image_label)?.setTextColor(
+				if (hasFocus) colorBlack else colorWhite
 			)
-		)
-		if (currentSelectedItem == 0) {
-			if (AppPreferences.get(AppConstants.userAvatar, DEFAULT.EMPTY_STRING).isNullOrBlank()) {
-				(getChildAt(currentSelectedItem).findViewById<View>(R.id.image) as ImageView).imageTintList =
-					ColorStateList.valueOf(
-						ContextCompat.getColor(
-							context, R.color.white
-						)
-					)
-				(getChildAt(currentSelectedItem).findViewById<View>(R.id.image_label) as TextView).setTextColor(
-					ContextCompat.getColor(
-						context, R.color.white
-					)
-				)
-			}
-		} else {
-			(getChildAt(currentSelectedItem).findViewById<View>(R.id.image) as ImageView).imageTintList =
-				ColorStateList.valueOf(
-					ContextCompat.getColor(
-						context, R.color.white
-					)
-				)
 		}
-	}
-
-	private fun updateHighlightCurrentSelectedNavigationMenu() {
-		(getChildAt(currentSelectedItem).findViewById<View>(R.id.label) as TextView).setTextColor(
-			ContextCompat.getColor(
-				context, R.color.white
-			)
-		)
-		if (currentSelectedItem == 0) {
-			if (AppPreferences.get(AppConstants.userAvatar, DEFAULT.EMPTY_STRING).isNullOrBlank()) {
-				(getChildAt(currentSelectedItem).findViewById<View>(R.id.image) as ImageView).imageTintList =
-					ColorStateList.valueOf(
-						ContextCompat.getColor(
-							context, R.color.white
-						)
-					)
-				(getChildAt(currentSelectedItem).findViewById<View>(R.id.image_label) as TextView).setTextColor(
-					ContextCompat.getColor(
-						context, R.color.white
-					)
-				)
-			}
-		} else {
-			(getChildAt(currentSelectedItem).findViewById<View>(R.id.image) as ImageView).imageTintList =
-				ColorStateList.valueOf(
-					ContextCompat.getColor(
-						context, R.color.white
-					)
-				)
-		}
-	}
-
-	fun setCurrentSelectedItem(currentSelected: Int) {
-		removeHighlightCurrentSelectedNavigationMenu()
-		this.currentSelectedItem = currentSelected
-		updateHighlightCurrentSelectedNavigationMenu()
 	}
 
 	fun setCurrentSelected(currentSelected: Int) {
@@ -254,7 +238,8 @@ class NavigationMenu : LinearLayout {
 	}
 
 	private fun clearNavigationMenuLabel() {
-		for (i in 0 until childCount) {            /*if (doesCompletelyHiddenRequired) {
+		for (i in 0 until childCount) {
+			/*if (doesCompletelyHiddenRequired) {
 				getChildAt(i).findViewById<View>(R.id.image).fadeOutNow(IntValue.NUMBER_100)
 				if (i == 0) {
 					getChildAt(i).findViewById<View>(R.id.image_label).fadeOutNow(IntValue.NUMBER_100)
@@ -281,6 +266,9 @@ class NavigationMenu : LinearLayout {
 
 				NavigationItems.BROWSE -> (getChildAt(i).findViewById<View>(R.id.label) as TextView).text =
 					context.resources.getString(R.string.home_label)
+
+				NavigationItems.LIVE_TV -> (getChildAt(i).findViewById<View>(R.id.label) as TextView).text =
+					context.resources.getString(R.string.live_tv_label)
 
 				NavigationItems.SEARCH -> (getChildAt(i).findViewById<View>(R.id.label) as TextView).text =
 					context.resources.getString(R.string.search_label)
@@ -311,48 +299,31 @@ class NavigationMenu : LinearLayout {
 	}
 
 	private fun changeNavigationMenuFocusStatus(isExpanded: Boolean) {
-		for (i in 0 until childCount) {
-			getChildAt(i).apply {
-				this.nextFocusLeftId = getChildAt(i).id
-				this.nextFocusUpId = if (i == 0) getChildAt(i).id else getChildAt(i - 1).id
-				this.nextFocusDownId =
-					if (i == childCount - 1) getChildAt(i).id else getChildAt(i + 1).id
-				this.nextFocusForwardId = getChildAt(i).nextFocusDownId
-				this.isFocusable = isExpanded
-				this.isFocusableInTouchMode = isExpanded
-				this.setOnFocusChangeListener { view, hasFocus ->
-					(view.findViewById<View>(R.id.label) as TextView).setTextColor(
-						ContextCompat.getColor(
-							context, if (hasFocus) R.color.black else R.color.white
-						)
-					)
-					if (i == 0) {
-						if (AppPreferences.get(AppConstants.userAvatar, DEFAULT.EMPTY_STRING)
-								.isNullOrBlank()
-						) {
-							(view.findViewById<View>(R.id.image) as ImageView).imageTintList =
-								ColorStateList.valueOf(
-									ContextCompat.getColor(
-										context, if (hasFocus) R.color.black else R.color.white
-									)
-								)
-							(view.findViewById<View>(R.id.image_label) as TextView).setTextColor(
-								ContextCompat.getColor(
-									context, if (hasFocus) R.color.black else R.color.white
-								)
-							)
-						}
-					} else {
-						(view.findViewById<View>(R.id.image) as ImageView).imageTintList =
-							ColorStateList.valueOf(
-								ContextCompat.getColor(
-									context, if (hasFocus) R.color.black else R.color.white
-								)
-							)
+		for (position in 0 until childCount) {
+			val childView = getChildAt(position)
+
+			childView.apply {
+				// Set focus properties
+				nextFocusLeftId = this.id
+				nextFocusUpId = if (position == 0) this.id else getChildAt(position - 1).id
+				nextFocusDownId =
+					if (position == childCount - 1) this.id else getChildAt(position + 1).id
+				nextFocusForwardId = nextFocusDownId
+				isFocusable = isExpanded
+				isFocusableInTouchMode = isExpanded
+
+				// Only set focus listener when the view is focusable (i.e., isExpanded is true)
+				if (isExpanded) {
+					setOnFocusChangeListener { view, _ ->
+						updateMenuItemColors(view, position, isExpanded = true)
 					}
+				} else {
+					// Clear focus if not expanded
+					clearFocus()
 				}
-				if (!isExpanded) this.clearFocus()
-				highlightCurrentSelectedNavigationMenu(isExpanded)
+
+				// Apply the colors initially
+				updateMenuItemColors(childView, position, isExpanded)
 			}
 		}
 	}

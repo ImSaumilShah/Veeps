@@ -51,6 +51,11 @@ object AppPreferences {
 		remove(AppConstants.userBeaconBaseURL)
 		remove(AppConstants.authenticatedUserToken)
 		remove(AppConstants.generatedJWT)
+		remove(AppConstants.reservedId)
+		remove(AppConstants.orderId)
+		remove(AppConstants.requestId)
+		remove(AppConstants.SKUId)
+		remove(AppConstants.receiptId)
 		Logger.print("Authenticated User Details Are Removed.")
 	}
 }

@@ -241,7 +241,7 @@ class CardAdapterGrid(private val action: AppAction) :
 			}
 			val title = entities[position].eventName
 			val artistTitle =
-				if (entities[position].lineup.isNotEmpty()) entities[position].lineup[0].name else ""
+				if (!entities[position].presentation.subtitle.isNullOrBlank()) entities[position].presentation.subtitle else DEFAULT.EMPTY_STRING
 			entities[position].presentation.let {
 				if (!it.badgeBgColor.isNullOrBlank()) holder.binding.eventBadgeContainer.background.colorFilter =
 					BlendModeColorFilterCompat.createBlendModeColorFilterCompat(

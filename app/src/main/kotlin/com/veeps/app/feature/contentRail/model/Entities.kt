@@ -52,4 +52,6 @@ data class Entities(
 	@SerializedName("stream_url") var streamUrl: String? = null,
 	@SerializedName("video_previews") var videoPreviews: Any? = null,
 	@SerializedName("has_collections") var hasCollections: Boolean = false,
+	@SerializedName("image_url") var imageUrl: String? = null,
+	@SerializedName("slug") var slug: String? = null,
 )

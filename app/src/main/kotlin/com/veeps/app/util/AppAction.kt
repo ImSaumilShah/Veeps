@@ -75,6 +75,12 @@ interface AppAction {
 		)
 	}
 
+	fun onAction(action: String) = run {
+		Logger.print(
+			"Action performed but not implemented"
+		)
+	}
+
 	fun onAction() = run {
 		Logger.print(
 			"Action performed but not implemented"

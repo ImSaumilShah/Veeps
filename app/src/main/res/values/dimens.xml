@@ -3,9 +3,12 @@
     <dimen name="expanded_navigation_menu_width">140dp</dimen>
     <dimen name="collapsed_navigation_menu_width">52dp</dimen>
     <dimen name="row_height_circle_without_follow">189dp</dimen>
+    <dimen name="row_height_landscape">135dp</dimen>
+    <dimen name="row_height_genre">120dp</dimen>
     <dimen name="row_height_default">280dp</dimen>
     <dimen name="row_height_rail">360dp</dimen>
     <dimen name="row_width_circle">143.5dp</dimen>
+    <dimen name="row_width_landscape">150dp</dimen>
     <dimen name="row_height_rail_circle_without_follow">538dp</dimen>
     <dimen name="row_width_vertical">203dp</dimen>
 
@@ -14,7 +17,12 @@
     <dimen name="dp16">16dp</dimen>
     <dimen name="dp32">32dp</dimen>
     <dimen name="dp75">75dp</dimen>
-
+    <dimen name="dp7">7dp</dimen>
+    <dimen name="dp10">10dp</dimen>
+    <dimen name="sp16">16sp</dimen>
+    <dimen name="dp15">15dp</dimen>
+    <dimen name="dp20">20dp</dimen>
+    <dimen name="sp50">50sp</dimen>
     <!-- EPG dimensions-->
     <!-- TODO Reset Removal-->
 

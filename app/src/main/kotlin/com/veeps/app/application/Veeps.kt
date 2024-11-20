@@ -3,6 +3,8 @@ package com.veeps.app.application
 import android.app.Application
 import android.content.Context
 import android.content.res.Configuration
+import com.veeps.app.BuildConfig
+import com.veeps.app.BuildConfig.isProduction
 import com.veeps.app.util.CrashHandler
 import com.veeps.app.util.Logger
 import io.github.inflationx.calligraphy3.CalligraphyConfig
@@ -20,12 +22,14 @@ class Veeps : Application() {
 	override fun onCreate() {
 		super.onCreate()
 		appContext = applicationContext
-		SentryAndroid.init(appContext) { options ->
-			options.isReportHistoricalAnrs = true
-			options.isAttachAnrThreadDump = true
-			options.tracesSampleRate = 1.0
-			options.tracesSampler = SentryOptions.TracesSamplerCallback {
-				null
+		if (isProduction && !BuildConfig.DEBUG) {
+			SentryAndroid.init(appContext) { options ->
+				options.isReportHistoricalAnrs = true
+				options.isAttachAnrThreadDump = true
+				options.tracesSampleRate = 1.0
+				options.tracesSampler = SentryOptions.TracesSamplerCallback {
+					null
+				}
 			}
 		}
 		Thread.setDefaultUncaughtExceptionHandler(CrashHandler())

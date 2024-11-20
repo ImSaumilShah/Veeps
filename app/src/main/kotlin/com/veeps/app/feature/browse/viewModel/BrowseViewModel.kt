@@ -9,8 +9,10 @@ import com.veeps.app.feature.contentRail.model.RailData
 
 class BrowseViewModel : ViewModel(), DefaultLifecycleObserver {
 	var isVisible = MutableLiveData(false)
+	var appVersionUpdateShouldVisible = false
 	var railData = MutableLiveData(ArrayList<RailData>())
 	var eventId: String = ""
+	var isAppUpdateCall: Boolean = false
 
 	override fun onResume(owner: LifecycleOwner) {
 		super.onResume(owner)
@@ -31,4 +33,6 @@ class BrowseViewModel : ViewModel(), DefaultLifecycleObserver {
 
 	fun addRemoveWatchListEvent(eventId: HashMap<String, Any>, isRemoveFromWatchList: Boolean) =
 		APIRepository().addRemoveWatchListEvent(eventId, isRemoveFromWatchList)
+
+	fun validateAppVersion(appVersion: String) = APIRepository().validateAppVersion(appVersion)
 }

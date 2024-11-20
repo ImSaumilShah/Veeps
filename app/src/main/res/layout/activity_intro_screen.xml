@@ -164,9 +164,214 @@
                 app:layout_constraintBottom_toBottomOf="parent"
                 app:layout_constraintStart_toStartOf="@+id/welcome_description"
                 app:layout_constraintTop_toBottomOf="@+id/welcome_description" />
-
         </androidx.constraintlayout.widget.ConstraintLayout>
 
+        <!-- Error Container Background Blur -->
+        <eightbitlab.com.blurview.BlurView
+            android:id="@+id/error_layout_container"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            app:blurOverlayColor="@color/black_33"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            android:visibility="gone"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent">
+
+            <ImageView
+                android:id="@+id/blackImage"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:contentDescription="@string/app_description"
+                android:src="@drawable/card_background_black"
+                app:layout_constraintBottom_toBottomOf="parent"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toTopOf="parent" />
+
+            <!-- Error Container -->
+            <androidx.constraintlayout.widget.ConstraintLayout
+                android:layout_width="match_parent"
+                android:layout_height="match_parent">
+
+                <!-- Guidelines -->
+                <include layout="@layout/guidelines" />
+
+                <!-- Error Text -->
+                <TextView
+                    android:id="@+id/error"
+                    fontPath="fonts/SaansMedium.ttf"
+                    android:layout_width="350dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="5dp"
+                    android:layout_marginBottom="2dp"
+                    android:elevation="5dp"
+                    android:gravity="center"
+                    android:includeFontPadding="false"
+                    android:padding="5dp"
+                    android:text="@{intro.errorMessage}"
+                    android:textColor="@color/white"
+                    android:textIsSelectable="false"
+                    android:textSize="16sp"
+                    app:layout_constrainedWidth="true"
+                    app:layout_constraintBottom_toTopOf="@+id/error_description"
+                    app:layout_constraintEnd_toEndOf="@+id/post_quarter_width"
+                    app:layout_constraintStart_toStartOf="@+id/pre_quarter_width"
+                    app:layout_constraintTop_toTopOf="@+id/top"
+                    app:layout_constraintVertical_chainStyle="packed" />
+
+                <TextView
+                    android:id="@+id/error_description"
+                    fontPath="fonts/SaansMedium.ttf"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:layout_marginBottom="5dp"
+                    android:elevation="5dp"
+                    android:gravity="center"
+                    android:includeFontPadding="false"
+                    android:padding="5dp"
+                    android:text=""
+                    android:textColor="@color/white_50"
+                    android:textIsSelectable="false"
+                    android:textSize="11sp"
+                    app:layout_constrainedWidth="true"
+                    app:layout_constraintBottom_toTopOf="@+id/re_watch_container"
+                    app:layout_constraintEnd_toEndOf="@+id/error"
+                    app:layout_constraintStart_toStartOf="@+id/error"
+                    app:layout_constraintTop_toBottomOf="@+id/error" />
+
+                <LinearLayout
+                    android:id="@+id/re_watch_container"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:layout_marginBottom="10dp"
+                    android:gravity="center"
+                    android:visibility="gone"
+                    android:orientation="horizontal"
+                    app:layout_constraintBottom_toTopOf="@+id/error_action_container"
+                    app:layout_constraintEnd_toEndOf="@+id/error"
+                    app:layout_constraintStart_toStartOf="@+id/error"
+                    app:layout_constraintTop_toBottomOf="@+id/error_description">
+
+                    <ImageView
+                        android:layout_width="24dp"
+                        android:layout_height="24dp"
+                        android:layout_marginStart="4dp"
+                        android:layout_marginEnd="2dp"
+                        android:contentDescription="@string/app_name"
+                        android:src="@drawable/re_watch" />
+
+                    <TextView
+                        android:id="@+id/re_watch"
+                        fontPath="fonts/SaansMedium.ttf"
+                        android:layout_width="153dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="2dp"
+                        android:layout_marginEnd="2dp"
+                        android:layout_marginBottom="1dp"
+                        android:gravity="center_vertical"
+                        android:includeFontPadding="false"
+                        android:textAlignment="gravity"
+                        android:textColor="@color/white"
+                        android:textIsSelectable="false"
+                        android:textSize="11sp"
+                        tools:ignore="MissingPrefix" />
+
+                </LinearLayout>
+
+                <!-- Error CTA Container -->
+                <androidx.constraintlayout.widget.ConstraintLayout
+                    android:id="@+id/error_action_container"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="5dp"
+                    android:padding="10dp"
+                    app:layout_constraintBottom_toTopOf="@+id/error_code"
+                    app:layout_constraintEnd_toEndOf="@+id/error"
+                    app:layout_constraintStart_toStartOf="@+id/error"
+                    app:layout_constraintTop_toBottomOf="@+id/re_watch_container">
+
+                    <!-- Error Positive CTA -->
+                    <Button
+                        android:id="@+id/positive"
+                        fontPath="fonts/SaansMedium.ttf"
+                        android:layout_width="170dp"
+                        android:layout_height="25dp"
+                        android:layout_marginStart="20dp"
+                        android:layout_marginEnd="10dp"
+                        android:layout_marginBottom="5dp"
+                        android:background="@drawable/selector_button_white"
+                        android:contentDescription="@string/app_description"
+                        android:focusable="true"
+                        android:focusableInTouchMode="true"
+                        android:lines="1"
+                        android:onClick="@{(v)-> introScreen.onErrorPositive()}"
+                        android:paddingBottom="1dp"
+                        android:text="@{intro.errorPositiveLabel}"
+                        android:textAllCaps="false"
+                        android:textColor="@color/selector_button_label_white"
+                        android:textIsSelectable="false"
+                        android:textSize="12sp"
+                        android:visibility="@{intro.isErrorPositiveApplicable() ? View.VISIBLE : View.GONE}"
+                        app:layout_constraintBottom_toBottomOf="parent"
+                        app:layout_constraintEnd_toStartOf="@+id/negative"
+                        app:layout_constraintHorizontal_chainStyle="packed"
+                        app:layout_constraintStart_toStartOf="parent"
+                        app:layout_constraintTop_toTopOf="parent" />
+
+                    <!-- Error Negative CTA -->
+                    <Button
+                        android:id="@+id/negative"
+                        fontPath="fonts/SaansMedium.ttf"
+                        android:layout_width="wrap_content"
+                        android:layout_height="170dp"
+                        android:layout_marginStart="20dp"
+                        android:layout_marginEnd="10dp"
+                        android:layout_marginBottom="5dp"
+                        android:background="@drawable/selector_button_white"
+                        android:contentDescription="@string/app_description"
+                        android:focusable="true"
+                        android:focusableInTouchMode="true"
+                        android:lines="1"
+                        android:visibility="gone"
+                        android:paddingBottom="1dp"
+                        android:textAllCaps="false"
+                        android:textColor="@color/selector_button_label_white"
+                        android:textIsSelectable="false"
+                        android:textSize="12sp"
+                        app:layout_constraintBottom_toBottomOf="parent"
+                        app:layout_constraintEnd_toEndOf="parent"
+                        app:layout_constraintStart_toEndOf="@+id/positive"
+                        app:layout_constraintTop_toTopOf="parent" />
+
+                </androidx.constraintlayout.widget.ConstraintLayout>
+
+                <TextView
+                    android:id="@+id/error_code"
+                    fontPath="fonts/SaansMedium.ttf"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="5dp"
+                    android:layout_marginBottom="5dp"
+                    android:elevation="5dp"
+                    android:gravity="center"
+                    android:includeFontPadding="false"
+                    android:padding="5dp"
+                    android:text=""
+                    android:textColor="@color/white"
+                    android:textIsSelectable="false"
+                    android:textSize="11sp"
+                    app:layout_constrainedWidth="true"
+                    app:layout_constraintBottom_toBottomOf="@+id/bottom"
+                    app:layout_constraintEnd_toEndOf="@+id/error"
+                    app:layout_constraintStart_toStartOf="@+id/error"
+                    app:layout_constraintTop_toBottomOf="@+id/error_action_container" />
+
+            </androidx.constraintlayout.widget.ConstraintLayout>
+
+        </eightbitlab.com.blurview.BlurView>
     </androidx.constraintlayout.widget.ConstraintLayout>
 
 </layout>

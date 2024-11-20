@@ -24,6 +24,7 @@ class ContentRailsAdapter(
 	private val helper: AppHelper,
 	private val screen: String,
 	private val action: AppAction,
+	private val isRecommended: Boolean = false,
 ) : RecyclerView.Adapter<ContentRailsAdapter.ViewHolder>() {
 
 	lateinit var context: Context
@@ -39,14 +40,14 @@ class ContentRailsAdapter(
 	}
 
 	override fun onBindViewHolder(holder: ViewHolder, position: Int) {
-		holder.binding.title.text = rails[position].name
+		holder.binding?.title?.text = rails[position].name
 		if (screen == Screens.BROWSE || screen == Screens.SHOWS || screen == Screens.ARTIST || screen == Screens.VENUE || screen == Screens.EVENT) {
-			val params = holder.binding.title.layoutParams as ConstraintLayout.LayoutParams
+			val params = holder.binding?.title?.layoutParams as ConstraintLayout.LayoutParams
 			params.marginStart = context.resources.getDimensionPixelSize(R.dimen.dp75)
 			params.marginEnd = context.resources.getDimensionPixelSize(R.dimen.dp75)
 			holder.binding.title.layoutParams = params
 		}
-		holder.binding.listing.apply {
+		holder.binding?.listing?.apply {
 			itemAnimator = null
 			setNumRows(1)
 			setHasFixedSize(true)
@@ -56,10 +57,18 @@ class ContentRailsAdapter(
 			isItemAlignmentOffsetWithPadding = true
 			itemAlignmentOffsetPercent = 0f
 			setRowHeight(
-				if (rails[position].cardType == CardTypes.CIRCLE) context.resources.getDimensionPixelSize(
-					R.dimen.row_height_circle_without_follow
-				)
-				else context.resources.getDimensionPixelSize(R.dimen.row_height_default)
+				when (rails[position].cardType) {
+					CardTypes.CIRCLE -> context.resources.getDimensionPixelSize(
+						R.dimen.row_height_circle_without_follow
+					)
+					CardTypes.LANDSCAPE, CardTypes.HERO -> context.resources.getDimensionPixelSize(
+						R.dimen.row_height_landscape
+					)
+					CardTypes.GENRE -> context.resources.getDimensionPixelSize(
+						R.dimen.row_height_genre
+					)
+					else -> context.resources.getDimensionPixelSize(R.dimen.row_height_default)
+				}
 			)
 //			setItemViewCacheSize(rails[position].entities.size)
 			val cardAdapter = CardAdapter(action)
@@ -69,6 +78,7 @@ class ContentRailsAdapter(
 			cardAdapter.setHelper(helper)
 			cardAdapter.setAdapterPosition(position)
 			cardAdapter.setScreen(screen)
+			cardAdapter.setIsRecommended(isRecommended)
 			cardAdapter.setContinueWatching(rails[position].isContinueWatching)
 			cardAdapter.setWatchList(rails[position].isWatchList)
 			cardAdapter.setRailCount(rails.size)
@@ -112,7 +122,7 @@ class ContentRailsAdapter(
 		notifyDataSetChanged()
 	}
 
-	inner class ViewHolder(val binding: RowContentRailBinding) :
-		RecyclerView.ViewHolder(binding.root)
+	inner class ViewHolder(val binding: RowContentRailBinding?) :
+		RecyclerView.ViewHolder(binding?.root!!)
 
 }

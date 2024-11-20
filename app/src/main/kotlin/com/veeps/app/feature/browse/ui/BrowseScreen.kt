@@ -16,7 +16,9 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.util.EventLogger
 import com.google.gson.Gson
 import com.google.gson.internal.LinkedTreeMap
+import com.veeps.app.BuildConfig
 import com.veeps.app.R
+import com.veeps.app.core.BaseDataSource.Resource.CallStatus.ERROR
 import com.veeps.app.core.BaseFragment
 import com.veeps.app.databinding.FragmentBrowseScreenBinding
 import com.veeps.app.extension.fadeInNow
@@ -34,7 +36,6 @@ import com.veeps.app.util.AppAction
 import com.veeps.app.util.AppConstants
 import com.veeps.app.util.AppPreferences
 import com.veeps.app.util.AppUtil
-import com.veeps.app.util.ButtonLabels
 import com.veeps.app.util.CardTypes
 import com.veeps.app.util.DEFAULT
 import com.veeps.app.util.DateTimeCompareDifference
@@ -47,7 +48,6 @@ import com.veeps.app.widget.navigationMenu.NavigationItems
 import org.joda.time.DateTime
 import org.joda.time.DateTimeZone
 import org.json.JSONObject
-import kotlin.random.Random
 
 
 class BrowseScreen : BaseFragment<BrowseViewModel, FragmentBrowseScreenBinding>() {
@@ -91,14 +91,22 @@ class BrowseScreen : BaseFragment<BrowseViewModel, FragmentBrowseScreenBinding>(
 			lifecycleOwner = viewLifecycleOwner
 			lifecycle.addObserver(viewModel)
 			loader.visibility = View.VISIBLE
+			browseLabel.visibility = View.GONE
+			onDemandLabel.visibility = View.GONE
 			loader.requestFocus()
 			carousel.visibility = View.INVISIBLE
 			darkBackground.visibility = View.VISIBLE
 			watermark.visibility = View.GONE
+			appUpdateContainer.visibility = View.GONE
 		}
 		setupBlur()
 		loadAppContent()
 		notifyAppEvents()
+	}
+
+	override fun onResume() {
+		super.onResume()
+		validateAppVersion()
 	}
 
 	private fun setupVideoPlayer() {
@@ -159,19 +167,13 @@ class BrowseScreen : BaseFragment<BrowseViewModel, FragmentBrowseScreenBinding>(
 		binding.browseLabel.outlineProvider = ViewOutlineProvider.BACKGROUND
 		binding.browseLabel.clipToOutline = true
 
+		binding.appUpdateContainer.setupWith(binding.container).setBlurRadius(12.5f)
+		binding.appUpdateContainer.outlineProvider = ViewOutlineProvider.BACKGROUND
+		binding.appUpdateContainer.clipToOutline = true
+
 		binding.onDemandLabel.setupWith(binding.container).setBlurRadius(12.5f)
 		binding.onDemandLabel.outlineProvider = ViewOutlineProvider.BACKGROUND
 		binding.onDemandLabel.clipToOutline = true
-
-		binding.primary.setupWith(binding.container).setBlurRadius(12.5f)
-		binding.primary.outlineProvider = ViewOutlineProvider.BACKGROUND
-		binding.primary.clipToOutline = true
-		binding.primary.setBlurEnabled(true)
-
-		binding.myShows.setupWith(binding.container).setBlurRadius(12.5f)
-		binding.myShows.outlineProvider = ViewOutlineProvider.BACKGROUND
-		binding.myShows.clipToOutline = true
-		binding.myShows.setBlurEnabled(true)
 	}
 
 	private fun loadAppContent() {
@@ -179,7 +181,7 @@ class BrowseScreen : BaseFragment<BrowseViewModel, FragmentBrowseScreenBinding>(
 			setNumColumns(1)
 			setHasFixedSize(true)
 			windowAlignment = BaseGridView.WINDOW_ALIGN_HIGH_EDGE
-			windowAlignmentOffsetPercent = 0f
+			windowAlignmentOffsetPercent = 12f
 			isItemAlignmentOffsetWithPadding = true
 			itemAlignmentOffsetPercent = 0f
 			adapter = railAdapter
@@ -203,38 +205,6 @@ class BrowseScreen : BaseFragment<BrowseViewModel, FragmentBrowseScreenBinding>(
 			}
 		}
 
-		binding.primary.setOnFocusChangeListener { _, hasFocus ->
-			context?.let { context ->
-				binding.primaryLabel.setTextColor(
-					ContextCompat.getColor(
-						context,
-						if (hasFocus) R.color.dark_black else if (binding.primaryLabel.isSelected) R.color.white_30 else R.color.white
-					)
-				)
-			}
-		}
-		binding.myShows.setOnFocusChangeListener { _, hasFocus ->
-			context?.let { context ->
-				binding.myShowsLabel.compoundDrawables.forEach { drawable ->
-					drawable?.setTint(
-						ContextCompat.getColor(
-							context,
-							if (hasFocus.or(binding.myShows.isFocused)
-									.or(binding.myShows.hasFocus())
-							) R.color.dark_black else R.color.white
-						)
-					)
-				}
-				binding.myShowsLabel.setTextColor(
-					ContextCompat.getColor(
-						context,
-						if (hasFocus.or(binding.myShows.isFocused)
-								.or(binding.myShows.hasFocus())
-						) R.color.dark_black else R.color.white
-					)
-				)
-			}
-		}
 		onBrowseLabelClicked()
 	}
 
@@ -277,6 +247,8 @@ class BrowseScreen : BaseFragment<BrowseViewModel, FragmentBrowseScreenBinding>(
 				if (this::player.isInitialized && player.mediaItemCount.isGreaterThan(0) && player.isPlaying) {
 					player.pause()
 				}
+				if (viewModel.appVersionUpdateShouldVisible) binding.appUpdateContainer.visibility =
+					View.GONE
 				binding.darkBackground.visibility = View.VISIBLE
 				binding.carousel.visibility = View.GONE
 				binding.browseLabel.visibility = View.GONE
@@ -298,10 +270,12 @@ class BrowseScreen : BaseFragment<BrowseViewModel, FragmentBrowseScreenBinding>(
 				binding.watermark.visibility = View.GONE
 				binding.darkBackground.visibility = View.GONE
 				binding.carousel.visibility = View.VISIBLE
-				binding.primary.requestFocus()
-				binding.browseLabel.visibility = View.VISIBLE
-				binding.onDemandLabel.visibility = View.VISIBLE
+				binding.listing.requestFocus()
+				binding.browseLabel.visibility = View.GONE
+				binding.onDemandLabel.visibility = View.GONE
 				binding.logo.visibility = View.VISIBLE
+				if (viewModel.appVersionUpdateShouldVisible) binding.appUpdateContainer.visibility =
+					View.VISIBLE
 			}
 		}
 
@@ -341,8 +315,8 @@ class BrowseScreen : BaseFragment<BrowseViewModel, FragmentBrowseScreenBinding>(
 					}
 					if (carousel.isNotEmpty()) {
 						carouselData = rails[carouselPosition]
-						setCarousel()
-						rails.removeAt(carouselPosition)
+						setCarousel(0)
+//						rails.removeAt(carouselPosition)
 					}
 				} else {
 					requireCarouselRemoval = true
@@ -357,39 +331,17 @@ class BrowseScreen : BaseFragment<BrowseViewModel, FragmentBrowseScreenBinding>(
 		}
 	}
 
-	private fun setCarousel() {
-		val random = Random.nextInt(carouselData.entities.size)
+	fun setCarousel(position: Int) {
+		val random = position//Random.nextInt(carouselData.entities.size)
 		val entity =
 			if (carouselData.entities.isNotEmpty()) carouselData.entities[random] else Entities()
-		binding.ctaContainer.visibility = View.INVISIBLE
-		binding.primary.alpha = 0.1f
-		binding.primaryLabel.text =
-			AppUtil.getPrimaryLabelText(entity, Screens.BROWSE, false).also { label ->
-				binding.primaryLabel.isSelected = label == ButtonLabels.UNAVAILABLE
-			}
 		viewModel.eventId = entity.id ?: DEFAULT.EMPTY_STRING
-		binding.primary.alpha = 1.0f
-		binding.myShows.visibility = if (AppPreferences.get(
-				AppConstants.userSubscriptionStatus, "none"
-			) != "none"
-		) View.VISIBLE else View.GONE
-		setupMyShows(isAdded = homeViewModel.watchlistIds.contains(entity.id?.ifBlank { DEFAULT.EMPTY_STRING }
-			?: DEFAULT.EMPTY_STRING))
-		binding.ctaContainer.visibility =
-			if (carouselData.entities.isNotEmpty()) View.VISIBLE else View.INVISIBLE
-		val currentDate = DateTime.now()
 		val otherDate = DateTime(entity.eventStreamStartsAt?.ifBlank { DateTime.now().toString() }
 			?: DateTime.now().toString(), DateTimeZone.UTC).withZone(DateTimeZone.getDefault())
 			.toDateTime()
-		binding.date.text = otherDate.toString("MMM dd, yyyy${DEFAULT.SEPARATOR}ha")
-		if (AppUtil.compare(otherDate, currentDate) == DateTimeCompareDifference.GREATER_THAN) {
-			binding.date.visibility = if (binding.browseLabel.isSelected) View.VISIBLE else View.GONE
-			binding.liveNow.visibility = View.GONE
-		} else {
-			binding.date.visibility = if (binding.browseLabel.isSelected) View.VISIBLE else View.GONE
-			binding.liveNow.visibility = View.GONE
-		}
+		binding.carouselDate.text = otherDate.toString("MMM dd, yyyy${DEFAULT.SEPARATOR}ha")
 		val title = entity.eventName?.ifBlank { DEFAULT.EMPTY_STRING } ?: DEFAULT.EMPTY_STRING
+		val description = entity.eventDescription?.ifBlank { DEFAULT.EMPTY_STRING } ?: DEFAULT.EMPTY_STRING
 		posterImage =
 			entity.presentation.posterUrl?.ifBlank { DEFAULT.EMPTY_STRING } ?: DEFAULT.EMPTY_STRING
 		val logoImage =
@@ -411,8 +363,9 @@ class BrowseScreen : BaseFragment<BrowseViewModel, FragmentBrowseScreenBinding>(
 		binding.carouselLogo.loadImage(logoImage, ImageTags.LOGO)
 		binding.heroImage.loadImage(posterImage, ImageTags.HERO)
 		binding.carouselTitle.text = title
+		binding.carouselDescription.text = description
 		binding.carousel.visibility = View.VISIBLE
-		binding.primary.requestFocus()
+		binding.listing.requestFocus()
 		binding.darkBackground.visibility = View.GONE
 		if (playbackURL.isNotBlank()) {
 			setupVideoPlayer()
@@ -534,46 +487,6 @@ class BrowseScreen : BaseFragment<BrowseViewModel, FragmentBrowseScreenBinding>(
 		}
 	}
 
-	fun addRemoveWatchListEvent(eventId: String) {
-		if (eventId.isNotBlank()) {
-			viewModel.addRemoveWatchListEvent(
-				hashMapOf("event_id" to eventId), binding.myShows.isSelected
-			).observe(viewLifecycleOwner) { addWatchList ->
-				fetch(
-					addWatchList,
-					isLoaderEnabled = false,
-					canUserAccessScreen = true,
-					shouldBeInBackground = true,
-				) {
-					setupMyShows(!binding.myShows.isSelected)
-				}
-			}
-		}
-	}
-
-	private fun setupMyShows(isAdded: Boolean) {
-		binding.myShows.isSelected = isAdded
-		binding.myShowsLabel.setCompoundDrawablesRelativeWithIntrinsicBounds(
-			if (binding.myShows.isSelected) {
-				if (binding.myShows.hasFocus()) R.drawable.check_black else R.drawable.check_white
-			} else {
-				if (binding.myShows.hasFocus()) R.drawable.add_black else R.drawable.add_white
-			}, 0, 0, 0
-		)
-		context?.let { context ->
-			binding.myShowsLabel.compoundDrawables.forEach { drawable ->
-				drawable?.setTint(
-					ContextCompat.getColor(
-						context,
-						if ((binding.myShows.isFocused)
-								.or(binding.myShows.hasFocus())
-						) R.color.dark_black else R.color.white
-					)
-				)
-			}
-		}
-	}
-
 	private fun fetchUserStats(
 		continueWatchingEntities: ArrayList<Entities>, rails: ArrayList<RailData>
 	) {
@@ -583,7 +496,7 @@ class BrowseScreen : BaseFragment<BrowseViewModel, FragmentBrowseScreenBinding>(
 		}
 		val userStatsAPIURL = AppPreferences.get(
 			AppConstants.userBeaconBaseURL, DEFAULT.EMPTY_STRING
-		) + APIConstants.fetchUserStats
+		) + APIConstants.FETCH_USER_STATS
 		AppPreferences.set(AppConstants.generatedJWT, AppUtil.generateJWT(eventIds))
 		viewModel.fetchUserStats(userStatsAPIURL, eventIds)
 			.observe(viewLifecycleOwner) { userStatsDetails ->
@@ -655,4 +568,31 @@ class BrowseScreen : BaseFragment<BrowseViewModel, FragmentBrowseScreenBinding>(
 			fetchOnDemandRails()
 		}
 	}
+
+	private fun validateAppVersion() {
+		viewModel.isAppUpdateCall = true
+		viewModel.validateAppVersion(BuildConfig.VERSION_NAME)
+			.observe(this@BrowseScreen) { appVersionResponse ->
+				fetch(
+					appVersionResponse,
+					isLoaderEnabled = false,
+					canUserAccessScreen = false,
+					shouldBeInBackground = false
+				) {
+					when (appVersionResponse.callStatus) {
+						ERROR -> {
+							appVersionResponse.message?.let {
+								if (appVersionResponse.message == "old_version") {
+									viewModel.appVersionUpdateShouldVisible = true
+									binding.appUpdateContainer.visibility = View.VISIBLE
+								}
+							}
+						}
+
+						else -> Logger.doNothing()
+					}
+				}
+			}
+	}
+
 }

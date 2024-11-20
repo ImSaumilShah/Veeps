@@ -1,5 +1,7 @@
 package com.veeps.app.feature.home.ui
 
+import android.animation.Animator
+import android.animation.AnimatorListenerAdapter
 import android.content.res.Resources
 import android.os.Bundle
 import android.os.Handler
@@ -27,9 +29,11 @@ import com.veeps.app.extension.showToast
 import com.veeps.app.extension.transformWidth
 import com.veeps.app.feature.artist.ui.ArtistScreen
 import com.veeps.app.feature.browse.ui.BrowseScreen
+import com.veeps.app.feature.contentRail.model.Products
 import com.veeps.app.feature.event.ui.EventScreen
 import com.veeps.app.feature.home.viewModel.HomeViewModel
 import com.veeps.app.feature.intro.ui.IntroScreen
+import com.veeps.app.feature.liveTV.ui.LiveTVScreen
 import com.veeps.app.feature.search.ui.SearchScreen
 import com.veeps.app.feature.shows.ui.ShowsScreen
 import com.veeps.app.feature.venue.ui.VenueScreen
@@ -40,19 +44,22 @@ import com.veeps.app.util.AppConstants
 import com.veeps.app.util.AppHelper
 import com.veeps.app.util.AppPreferences
 import com.veeps.app.util.DEFAULT
+import com.veeps.app.util.IntValue
 import com.veeps.app.util.Logger
+import com.veeps.app.util.PurchaseResponseStatus
+import com.veeps.app.util.PurchaseType
 import com.veeps.app.util.Screens
+import com.veeps.app.util.SubscriptionPlanSKUs
 import com.veeps.app.widget.navigationMenu.NavigationItem
 import com.veeps.app.widget.navigationMenu.NavigationItems
 import kotlin.system.exitProcess
 
 
 class HomeScreen : BaseActivity<HomeViewModel, ActivityHomeScreenBinding>(), NavigationItem,
-	AppHelper, PurchasingListener {
+	AppHelper {
 
 	private var currentUserId: String = DEFAULT.EMPTY_STRING
 	private var currentMarketplace: String = DEFAULT.EMPTY_STRING
-
 	private fun getBackCallback(): OnBackPressedCallback {
 		val backPressedCallback = object : OnBackPressedCallback(true) {
 			override fun handleOnBackPressed() {
@@ -74,6 +81,8 @@ class HomeScreen : BaseActivity<HomeViewModel, ActivityHomeScreenBinding>(), Nav
 				}"
 			)
 			if (binding.errorContainer.isVisible) {
+				return true
+			} else if (viewModel.isPaymentInProgress) {
 				return true
 			} else if (viewModel.isNavigationMenuVisible.value!! && supportFragmentManager.findFragmentById(
 					R.id.fragment_container
@@ -120,7 +129,7 @@ class HomeScreen : BaseActivity<HomeViewModel, ActivityHomeScreenBinding>(), Nav
 		viewModel.errorMessage.postValue(message)
 		binding.errorDescription.text = description
 		when (tag) {
-			APIConstants.removeWatchListEvents -> {
+			APIConstants.REMOVE_WATCH_LIST_EVENTS -> {
 				viewModel.errorPositiveLabel.postValue(getString(R.string.ok_label))
 				viewModel.errorNegativeLabel.postValue(getString(R.string.cancel_label))
 				viewModel.isErrorPositiveApplicable.postValue(true)
@@ -142,6 +151,13 @@ class HomeScreen : BaseActivity<HomeViewModel, ActivityHomeScreenBinding>(), Nav
 			}
 
 			Screens.BROWSE -> {
+				viewModel.errorPositiveLabel.postValue(getString(R.string.ok_label))
+				viewModel.errorNegativeLabel.postValue(getString(R.string.cancel_label))
+				viewModel.isErrorPositiveApplicable.postValue(true)
+				viewModel.isErrorNegativeApplicable.postValue(false)
+			}
+
+			Screens.SUBSCRIPTION -> {
 				viewModel.errorPositiveLabel.postValue(getString(R.string.ok_label))
 				viewModel.errorNegativeLabel.postValue(getString(R.string.cancel_label))
 				viewModel.isErrorPositiveApplicable.postValue(true)
@@ -194,7 +210,7 @@ class HomeScreen : BaseActivity<HomeViewModel, ActivityHomeScreenBinding>(), Nav
 
 	fun onErrorPositive(tag: Any?) {
 		when (tag) {
-			APIConstants.removeWatchListEvents -> {
+			APIConstants.REMOVE_WATCH_LIST_EVENTS -> {
 				binding.errorContainer.visibility = View.GONE
 				addRemoveWatchListEvent(binding.errorDescription.text.toString())
 			}
@@ -344,7 +360,7 @@ class HomeScreen : BaseActivity<HomeViewModel, ActivityHomeScreenBinding>(), Nav
 
 	override fun removeEventFromWatchList(eventId: String) {
 		showError(
-			APIConstants.removeWatchListEvents,
+			APIConstants.REMOVE_WATCH_LIST_EVENTS,
 			"Are you sure you want to remove it from My Shows?",
 			eventId
 		)
@@ -382,12 +398,30 @@ class HomeScreen : BaseActivity<HomeViewModel, ActivityHomeScreenBinding>(), Nav
 	}
 
 	private fun showNavigationMenu(navigationMenu: View) {
+		binding.navigationMenuBackground.apply {
+			alpha = 0f
+			visibility = View.VISIBLE
+			animate()
+				.alpha(1f)
+				.setDuration(IntValue.NUMBER_333.toLong())
+				.setListener(null)
+		}
 		binding.navigationMenu.onFocusChangeListener = null
 		navigationMenu.transformWidth(R.dimen.expanded_navigation_menu_width, false)
 		viewModel.isNavigationMenuVisible.postValue(true)
 	}
 
 	private fun hideNavigationMenu(navigationMenu: View) {
+		binding.navigationMenuBackground.apply {
+			animate()
+				.alpha(0f)
+				.setDuration(IntValue.NUMBER_200.toLong()) // Duration of the animation in milliseconds
+				.setListener(object : AnimatorListenerAdapter() {
+					override fun onAnimationEnd(animation: Animator) {
+						visibility = View.GONE // Make the view invisible when the animation ends
+					}
+				})
+		}
 		val screen = supportFragmentManager.findFragmentById(R.id.fragment_container)
 		val doesCompletelyHiddenRequired: Boolean = when (screen?.tag) {
 			Screens.ARTIST -> {
@@ -399,6 +433,10 @@ class HomeScreen : BaseActivity<HomeViewModel, ActivityHomeScreenBinding>(), Nav
 			}
 
 			Screens.EVENT -> {
+				true
+			}
+
+			Screens.SUBSCRIPTION -> {
 				true
 			}
 
@@ -438,6 +476,10 @@ class HomeScreen : BaseActivity<HomeViewModel, ActivityHomeScreenBinding>(), Nav
 					fragment = BrowseScreen::class.java
 				}
 
+				NavigationItems.LIVE_TV -> {
+					fragment = LiveTVScreen::class.java
+				}
+
 				NavigationItems.SEARCH -> {
 					fragment = SearchScreen::class.java
 				}
@@ -451,6 +493,12 @@ class HomeScreen : BaseActivity<HomeViewModel, ActivityHomeScreenBinding>(), Nav
 			when (tag) {
 				NavigationItems.PROFILE -> {
 					showError(Screens.PROFILE, resources.getString(R.string.sign_out_warning))
+				}
+				NavigationItems.MY_SHOWS -> {
+					val selectedFragment = supportFragmentManager.findFragmentById(R.id.fragment_container)
+					if (selectedFragment is ShowsScreen) {
+						viewModel.shouldRefresh.postValue(true)
+					}
 				}
 			}
 		}
@@ -475,7 +523,7 @@ class HomeScreen : BaseActivity<HomeViewModel, ActivityHomeScreenBinding>(), Nav
 		}
 	}
 
-	private fun knowFocusedView() {
+	fun knowFocusedView() {
 		Thread {
 			var oldId = -1
 			while (true) {
@@ -507,6 +555,13 @@ class HomeScreen : BaseActivity<HomeViewModel, ActivityHomeScreenBinding>(), Nav
 	override fun onDestroy() {
 		binding.navigationMenu.onFocusChangeListener = null
 		super.onDestroy()
+	}
+
+	override fun setCarousel(position: Int) {
+		val fragment = supportFragmentManager.findFragmentById(R.id.fragment_container)
+		if (fragment is BrowseScreen) {
+			fragment.setCarousel(position)
+		}
 	}
 
 	override fun translateCarouselToTop(needsOnTop: Boolean) {
@@ -593,73 +648,168 @@ class HomeScreen : BaseActivity<HomeViewModel, ActivityHomeScreenBinding>(), Nav
 	}
 
 	private fun initiateIAP() {
-		PurchasingService.registerListener(this@HomeScreen, this@HomeScreen)
+		PurchasingService.registerListener(this@HomeScreen, object : PurchasingListener {
+			override fun onUserDataResponse(response: UserDataResponse?) {
+				when (response?.requestStatus) {
+					UserDataResponse.RequestStatus.SUCCESSFUL -> {
+						currentUserId = response.userData.userId
+						currentMarketplace = response.userData.marketplace
+					}
+
+					UserDataResponse.RequestStatus.FAILED, UserDataResponse.RequestStatus.NOT_SUPPORTED, null -> {
+					}
+				}
+			}
+
+			override fun onProductDataResponse(productDataResponse: ProductDataResponse?) {
+				when (productDataResponse?.requestStatus) {
+					ProductDataResponse.RequestStatus.SUCCESSFUL -> {
+						viewModel.productsList.clear()
+						productDataResponse.let {
+							productDataResponse.productData.forEach { (productSKU, productData) ->
+								if (productData.productType.toString() == PurchaseType.SUBSCRIPTION) {
+									if (productSKU == SubscriptionPlanSKUs.VEEPS_MONTHLY_SUBSCRIPTION || productSKU == SubscriptionPlanSKUs.VEEPS_YEARLY_SUBSCRIPTION) viewModel.productsList.add(
+										Products(
+											id = productSKU,
+											name = productData.subscriptionPeriod,
+											description = productData.description,
+											price = productData.price
+										)
+									)
+
+								}
+							}
+						}
+					}
+
+					ProductDataResponse.RequestStatus.FAILED, ProductDataResponse.RequestStatus.NOT_SUPPORTED, null -> {
+						Logger.print(
+							"product data not available"
+						)
+					}
+				}
+			}
+
+			override fun onPurchaseResponse(purchaseResponse: PurchaseResponse?) {
+				purchaseResponse?.let { Logger.print("Purchase - $it") }
+				when (purchaseResponse?.requestStatus) {
+					PurchaseResponse.RequestStatus.SUCCESSFUL -> {
+						if (!purchaseResponse.receipt.isCanceled && purchaseResponse.receipt.receiptId != AppPreferences.get(AppConstants.receiptId, DEFAULT.EMPTY_STRING).toString()) {
+							AppPreferences.set(AppConstants.receiptId, purchaseResponse.receipt.receiptId)
+							viewModel.purchaseAction.postValue(PurchaseResponseStatus.SUCCESS)
+						}
+					}
+
+					PurchaseResponse.RequestStatus.FAILED -> {
+						viewModel.purchaseAction.postValue(PurchaseResponseStatus.FAILED)
+					}
+
+					PurchaseResponse.RequestStatus.INVALID_SKU -> {
+						viewModel.purchaseAction.postValue(PurchaseResponseStatus.INVALID_SKU)
+					}
+
+					PurchaseResponse.RequestStatus.ALREADY_PURCHASED -> {
+						viewModel.purchaseAction.postValue(PurchaseResponseStatus.ALREADY_PURCHASED)
+					}
+
+					PurchaseResponse.RequestStatus.NOT_SUPPORTED -> {
+						viewModel.purchaseAction.postValue(PurchaseResponseStatus.NOT_SUPPORTED)
+					}
+
+					PurchaseResponse.RequestStatus.PENDING -> {
+						viewModel.purchaseAction.postValue(PurchaseResponseStatus.PENDING)
+					}
+
+					else -> {
+						viewModel.purchaseAction.postValue(PurchaseResponseStatus.CANCELLED_BY_VEEPS)
+					}
+				}
+			}
+
+			override fun onPurchaseUpdatesResponse(response: PurchaseUpdatesResponse?) {
+				response?.let { Logger.print("Purchase Update - $it") }
+				when (response?.requestStatus) {
+					PurchaseUpdatesResponse.RequestStatus.SUCCESSFUL -> {
+						response.receipts.forEach { receipt ->
+							if (!receipt.isCanceled && receipt.receiptId != AppPreferences.get(AppConstants.receiptId, DEFAULT.EMPTY_STRING).toString()) {
+								if (receipt.sku.equals(AppPreferences.get(AppConstants.SKUId, DEFAULT.EMPTY_STRING))) {
+									AppPreferences.set(AppConstants.receiptId, receipt.receiptId)
+									if (viewModel.isSubscription) {
+										Logger.doNothing()
+									} else createOrder()
+								} else {
+									PurchasingService.notifyFulfillment(receipt.receiptId, FulfillmentResult.UNAVAILABLE)
+									viewModel.purchaseAction.postValue(PurchaseResponseStatus.NONE)
+								}
+							}
+						}
+					}
+
+					else -> {}
+				}
+			}
+		})
 		PurchasingService.enablePendingPurchases()
 		PurchasingService.getUserData()
-		PurchasingService.getPurchaseUpdates(true)
+		fetchProduct()
 	}
 
-	fun fetchProduct() {
-		val productSkus = hashSetOf("parentSKU")
-		PurchasingService.getProductData(productSkus)
+	private fun fetchProduct() {
+		val productSKUs = hashSetOf(SubscriptionPlanSKUs.MONTHLY_SUBSCRIPTION, SubscriptionPlanSKUs.YEARLY_SUBSCRIPTION, SubscriptionPlanSKUs.MONTHLY_TERM_SUBSCRIPTION, SubscriptionPlanSKUs.YEARLY_TERM_SUBSCRIPTION, SubscriptionPlanSKUs.VEEPS_ALL_ACCESS_SUBSCRIPTION, SubscriptionPlanSKUs.VEEPS_MONTHLY_SUBSCRIPTION, SubscriptionPlanSKUs.VEEPS_YEARLY_SUBSCRIPTION)
+		if (isFireTV) {
+			PurchasingService.getProductData(productSKUs)
+		}
 	}
 
 	fun purchaseProduct() {
 		PurchasingService.purchase("parentSKU")
 	}
 
-	override fun onUserDataResponse(response: UserDataResponse?) {
-		when (response?.requestStatus) {
-			UserDataResponse.RequestStatus.SUCCESSFUL -> {
-				currentUserId = response.userData.userId
-				currentMarketplace = response.userData.marketplace
-			}
-
-			UserDataResponse.RequestStatus.FAILED, UserDataResponse.RequestStatus.NOT_SUPPORTED, null -> {
-			}
-		}
-	}
-
-	override fun onProductDataResponse(productDataResponse: ProductDataResponse?) {}
-
-	override fun onPurchaseResponse(purchaseResponse: PurchaseResponse?) {
-		when (purchaseResponse?.requestStatus) {
-			PurchaseResponse.RequestStatus.SUCCESSFUL -> {
-				viewModel.receiptId = purchaseResponse.receipt.receiptId
-				viewModel.purchaseAction.postValue("PURCHASED")
-				PurchasingService.notifyFulfillment(
-					purchaseResponse.receipt.receiptId, FulfillmentResult.FULFILLED
-				)
-			}
-
-			PurchaseResponse.RequestStatus.FAILED -> {
-				viewModel.purchaseAction.postValue("FAILED")
-			}
-
-			else -> {
-				viewModel.purchaseAction.postValue("FAILED")
-			}
-		}
-	}
-
-	override fun onPurchaseUpdatesResponse(response: PurchaseUpdatesResponse?) {
-		when (response?.requestStatus) {
-			PurchaseUpdatesResponse.RequestStatus.SUCCESSFUL -> {
-				if (response.hasMore()) {
-					PurchasingService.getPurchaseUpdates(true)
+	private fun createOrder() {
+		viewModel.createOrder(
+			hashMapOf(
+				"order_id" to AppPreferences.get(AppConstants.orderId, DEFAULT.EMPTY_STRING).toString(),
+				"payment_id" to AppPreferences.get(AppConstants.receiptId, DEFAULT.EMPTY_STRING).toString(),
+				"vendor" to "fire_tv",
+			)
+		).observe(this@HomeScreen) { createOrder ->
+			fetch(
+				createOrder,
+				isLoaderEnabled = false,
+				canUserAccessScreen = true,
+				shouldBeInBackground = true
+			) {
+				createOrder.response?.let {
+					it.data?.let {
+						PurchasingService.notifyFulfillment(AppPreferences.get(AppConstants.receiptId, DEFAULT.EMPTY_STRING).toString(), FulfillmentResult.FULFILLED)
+						if (viewModel.purchaseAction.value == PurchaseResponseStatus.SUCCESS) showToast(getString(R.string.payment_success))
+						val fragment = supportFragmentManager.findFragmentById(R.id.fragment_container)
+						if (fragment is EventScreen) {
+							viewModel.purchaseAction.postValue(PurchaseResponseStatus.SUCCESS_WITH_PENDING_PURCHASE)
+						} else {
+							AppPreferences.remove(AppConstants.reservedId)
+							AppPreferences.remove(AppConstants.receiptId)
+							AppPreferences.remove(AppConstants.orderId)
+							AppPreferences.remove(AppConstants.requestId)
+							AppPreferences.remove(AppConstants.SKUId)
+							viewModel.isPaymentInProgress = false
+							viewModel.purchaseAction.postValue(PurchaseResponseStatus.NONE)
+						}
+					} ?: run {
+						PurchasingService.notifyFulfillment(AppPreferences.get(AppConstants.receiptId, DEFAULT.EMPTY_STRING).toString(), FulfillmentResult.UNAVAILABLE)
+						viewModel.purchaseAction.postValue(if (viewModel.purchaseAction.value == PurchaseResponseStatus.SUCCESS_WITH_PENDING_PURCHASE) PurchaseResponseStatus.NONE else PurchaseResponseStatus.FAILED)
+					}
+				} ?: run {
+					PurchasingService.notifyFulfillment(AppPreferences.get(AppConstants.receiptId, DEFAULT.EMPTY_STRING).toString(), FulfillmentResult.UNAVAILABLE)
+					viewModel.purchaseAction.postValue(if (viewModel.purchaseAction.value == PurchaseResponseStatus.SUCCESS_WITH_PENDING_PURCHASE) PurchaseResponseStatus.NONE else PurchaseResponseStatus.FAILED)
 				}
-			}
-
-			PurchaseUpdatesResponse.RequestStatus.FAILED -> {
-			}
-
-			else -> {
 			}
 		}
 	}
 
 	override fun onResume() {
 		super.onResume()
+		if (isFireTV) PurchasingService.getPurchaseUpdates(true)
 		val fragment = supportFragmentManager.findFragmentById(R.id.fragment_container)
 		if (fragment is EventScreen) {
 			viewModel.updateUserStat.postValue(true)

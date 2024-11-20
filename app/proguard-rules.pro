@@ -39,6 +39,7 @@
 
 # Gson
 -dontwarn sun.misc.**
+-keep class sun.misc.Unsafe { *; }
 -keep class com.google.gson.examples.android.model.** { *; }
 -keep class * implements com.google.gson.TypeAdapterFactory
 -keep class * implements com.google.gson.JsonSerializer
@@ -71,3 +72,12 @@
 # PubNub
 -dontwarn com.pubnub.**
 -keep class com.pubnub.** { *; }
+
+# IAP
+-dontwarn com.amazon.**
+-keep class com.amazon.** {*;}
+-keepattributes *Annotation*
+-dontoptimize -dontobfuscate
+
+-keep class com.bitmovin.analytics.stateMachines.PlayerStateMachine$Factory { *; }
+     -keep class com.bitmovin.analytics.** { *; }

@@ -124,12 +124,12 @@ class WaitingRoomScreen : BaseActivity<WaitingRoomViewModel, ActivityWaitingRoom
 					}
 
 					override fun onFinish() {
+						finish()
 						goToScreen<VideoPlayerScreen>(
 							false,
 							AppConstants.TAG to Screens.VIDEO,
 							"eventId" to (viewModel.eventId.value ?: DEFAULT.EMPTY_STRING)
 						)
-						finish()
 					}
 				}
 			timer.start()

@@ -24,9 +24,22 @@
 
     <color name="dark_gray">#565656</color>
     <color name="gray_300">#FF9898A1</color>
+    <color name="gray">#A6A8B4</color>
     <color name="red">#FFEA0034</color>
     <color name="red_30">#4DEA0034</color>
     <color name="red_75">#BFEA0034</color>
 
+    <color name="comedy">#914EFA</color>
+    <color name="country">#c2a983</color>
+    <color name="indie">#67862b</color>
+    <color name="pop">#FA98F9</color>
+    <color name="kpop">#f544aa</color>
+    <color name="rap">#017c5e</color>
+    <color name="folk">#f8471d</color>
+    <color name="rock">#191919</color>
+    <color name="alternative">#ab1a16</color>
+    <color name="jazz">#2A38D8</color>
+    <color name="metal">#4D0000</color>
+    <color name="rnb">#6010c5</color>
 </resources>
 

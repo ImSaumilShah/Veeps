@@ -17,6 +17,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.util.EventLogger
 import androidx.recyclerview.widget.PagerSnapHelper
 import com.amazon.device.iap.PurchasingService
+import com.amazon.device.iap.model.FulfillmentResult
 import com.google.gson.Gson
 import com.google.gson.internal.LinkedTreeMap
 import com.veeps.app.R
@@ -27,6 +28,7 @@ import com.veeps.app.extension.fadeOutNow
 import com.veeps.app.extension.isFireTV
 import com.veeps.app.extension.isGreaterThan
 import com.veeps.app.extension.loadImage
+import com.veeps.app.extension.showToast
 import com.veeps.app.feature.contentRail.adapter.ContentRailsAdapter
 import com.veeps.app.feature.contentRail.model.Entities
 import com.veeps.app.feature.contentRail.model.Products
@@ -45,6 +47,7 @@ import com.veeps.app.util.EntityTypes
 import com.veeps.app.util.ImageTags
 import com.veeps.app.util.IntValue
 import com.veeps.app.util.Logger
+import com.veeps.app.util.PurchaseResponseStatus
 import com.veeps.app.util.Screens
 import com.veeps.app.widget.navigationMenu.NavigationItems
 import io.noties.markwon.Markwon
@@ -65,6 +68,8 @@ class EventScreen : BaseFragment<EventViewModel, FragmentEventDetailsScreenBindi
 	private var eventDetails: Entities = Entities()
 	private var isEventPurchased: Boolean = false
 	private var rail: ArrayList<RailData> = arrayListOf()
+	private var recommendedRailList: ArrayList<RailData> = arrayListOf()
+	private var recommendedRailData: ArrayList<RailData> = arrayListOf()
 	private val action by lazy {
 		object : AppAction {
 			override fun onAction() {
@@ -96,6 +101,8 @@ class EventScreen : BaseFragment<EventViewModel, FragmentEventDetailsScreenBindi
 			loader.visibility = View.VISIBLE
 			logo.requestFocus()
 			rail = arrayListOf()
+			subscribe.visibility = View.GONE
+			myShows.visibility = View.GONE
 			carousel.visibility = View.INVISIBLE
 			resumeProgress.visibility = View.INVISIBLE
 			darkBackground.visibility = View.VISIBLE
@@ -164,6 +171,11 @@ class EventScreen : BaseFragment<EventViewModel, FragmentEventDetailsScreenBindi
 		binding.primary.clipToOutline = true
 		binding.primary.setBlurEnabled(true)
 
+		binding.subscribe.setupWith(binding.layoutContainer).setBlurRadius(12.5f)
+		binding.subscribe.outlineProvider = ViewOutlineProvider.BACKGROUND
+		binding.subscribe.clipToOutline = true
+		binding.subscribe.setBlurEnabled(true)
+
 		binding.myShows.setupWith(binding.layoutContainer).setBlurRadius(12.5f)
 		binding.myShows.outlineProvider = ViewOutlineProvider.BACKGROUND
 		binding.myShows.clipToOutline = true
@@ -203,6 +215,17 @@ class EventScreen : BaseFragment<EventViewModel, FragmentEventDetailsScreenBindi
 						if (hasFocus) R.color.dark_black else if (binding.primaryLabel.isSelected) R.color.white_30 else R.color.white
 					)
 				)
+
+			}
+		}
+		binding.subscribe.setOnFocusChangeListener { _, hasFocus ->
+			context?.let { context ->
+				binding.subscribeLabel.setTextColor(
+					ContextCompat.getColor(
+						context,
+						if (hasFocus) R.color.dark_black else if (binding.subscribeLabel.isSelected) R.color.white_30 else R.color.white
+					)
+				)
 			}
 		}
 		binding.myShows.setOnFocusChangeListener { _, hasFocus ->
@@ -230,6 +253,24 @@ class EventScreen : BaseFragment<EventViewModel, FragmentEventDetailsScreenBindi
 		}
 
 		binding.primary.setOnKeyListener { _, keyCode, keyEvent ->
+			if (keyEvent.action == KeyEvent.ACTION_DOWN) {
+				if (keyCode == KeyEvent.KEYCODE_DPAD_DOWN) {
+					if (rail.none { it.entities.isNotEmpty() }) {
+						if (!binding.description.text.isNullOrBlank()) {
+							if (this::player.isInitialized && player.mediaItemCount.isGreaterThan(0) && player.isPlaying) {
+								player.pause()
+							}
+							binding.description.requestFocus()
+							binding.darkBackground.visibility = View.VISIBLE
+							binding.carousel.visibility = View.GONE
+						}
+					}
+				}
+			}
+			return@setOnKeyListener false
+		}
+
+		binding.subscribe.setOnKeyListener { _, keyCode, keyEvent ->
 			if (keyEvent.action == KeyEvent.ACTION_DOWN) {
 				if (keyCode == KeyEvent.KEYCODE_DPAD_DOWN) {
 					if (rail.none { it.entities.isNotEmpty() }) {
@@ -278,7 +319,7 @@ class EventScreen : BaseFragment<EventViewModel, FragmentEventDetailsScreenBindi
 							binding.listing.requestFocus()
 						} else {
 							binding.carousel.visibility = View.VISIBLE
-							binding.primary.requestFocus()
+							if (binding.primary.visibility == View.VISIBLE) binding.primary.requestFocus() else binding.myShows.requestFocus()
 							binding.darkBackground.visibility = View.GONE
 							if (this::player.isInitialized && player.mediaItemCount.isGreaterThan(0) && !player.isPlaying && homeViewModel.isErrorVisible.value?.equals(
 									false
@@ -288,6 +329,12 @@ class EventScreen : BaseFragment<EventViewModel, FragmentEventDetailsScreenBindi
 							}
 						}
 					}
+				} else if (!recommendedRailList.none { it.entities.isNotEmpty() } && keyCode == KeyEvent.KEYCODE_DPAD_DOWN) {
+					binding.listing.visibility = View.GONE
+					binding.description.visibility = View.GONE
+					binding.scrollView.visibility = View.GONE
+					binding.optionsContainer.visibility = View.GONE
+					binding.recommendationListing.requestFocus()
 				}
 			}
 			return@setOnKeyListener false
@@ -295,6 +342,9 @@ class EventScreen : BaseFragment<EventViewModel, FragmentEventDetailsScreenBindi
 
 		homeViewModel.focusItem.observe(viewLifecycleOwner) { hasFocus ->
 			if (hasFocus && !binding.description.text.isNullOrBlank()) {
+				binding.description.visibility = View.VISIBLE
+				binding.scrollView.visibility = View.VISIBLE
+				binding.optionsContainer.visibility = View.VISIBLE
 				binding.description.requestFocus()
 				if (!rail.none { it.entities.isNotEmpty() }) {
 					binding.listing.visibility = View.GONE
@@ -353,7 +403,7 @@ class EventScreen : BaseFragment<EventViewModel, FragmentEventDetailsScreenBindi
 			if (shouldTranslate && viewModel.isVisible.value == true) {
 				binding.darkBackground.visibility = View.GONE
 				binding.carousel.visibility = View.VISIBLE
-				binding.primary.requestFocus()
+				if (binding.primary.visibility == View.VISIBLE) binding.primary.requestFocus() else binding.myShows.requestFocus()
 				if (this::player.isInitialized && player.mediaItemCount.isGreaterThan(0) && !player.isPlaying && homeViewModel.isErrorVisible.value?.equals(
 						false
 					) == true && binding.darkBackground.visibility == View.GONE
@@ -366,22 +416,49 @@ class EventScreen : BaseFragment<EventViewModel, FragmentEventDetailsScreenBindi
 		homeViewModel.purchaseAction.observe(viewLifecycleOwner) {
 			if (it.isNullOrBlank()) {
 				binding.paymentLoader.visibility = View.GONE
+			} else if (it == PurchaseResponseStatus.SUCCESS) {
+				if (!homeViewModel.isSubscription) createOrder()
+			} else if (it == PurchaseResponseStatus.SUCCESS_WITH_PENDING_PURCHASE) {
+				fetchEventStreamDetails()
 			} else {
+				var errorMessage = getString(R.string.unknown_error)
 				when (it) {
-					"PURCHASED" -> {
-						createOrder()
+					PurchaseResponseStatus.FAILED -> {
+						errorMessage = getString(R.string.payment_failed)
 					}
 
-					"FAILED" -> {
-						homeViewModel.purchaseAction.postValue(null)
-						helper.showErrorOnScreen(
-							APIConstants.generateNewOrder, "Payment Failed. Please Try Again."
-						)
-						binding.paymentLoader.visibility = View.GONE
+					PurchaseResponseStatus.INVALID_SKU -> {
+						errorMessage = getString(R.string.product_not_available)
+					}
+
+					PurchaseResponseStatus.NOT_SUPPORTED -> {
+						errorMessage = getString(R.string.iap_not_supported)
+					}
+
+					PurchaseResponseStatus.PENDING -> {
+						errorMessage = getString(R.string.payment_pending)
+					}
+
+					PurchaseResponseStatus.ALREADY_PURCHASED -> {
+						errorMessage = getString(R.string.ticket_already_purchased)
 					}
 				}
+
+				if (it != PurchaseResponseStatus.NONE) {
+					helper.showErrorOnScreen(APIConstants.GENERATE_NEW_ORDER, errorMessage)
+					homeViewModel.purchaseAction.postValue(PurchaseResponseStatus.NONE)
+				}
+
+				AppPreferences.remove(AppConstants.reservedId)
+				AppPreferences.remove(AppConstants.receiptId)
+				AppPreferences.remove(AppConstants.orderId)
+				AppPreferences.remove(AppConstants.requestId)
+				AppPreferences.remove(AppConstants.SKUId)
+				homeViewModel.isPaymentInProgress = false
+				binding.paymentLoader.visibility = View.GONE
 			}
 		}
+
 		homeViewModel.updateUserStat.observe(viewLifecycleOwner) { doesUpdateRequired ->
 			if (doesUpdateRequired && binding.primary.tag == ButtonLabels.PLAY) {
 				fetchUserStats()
@@ -428,6 +505,8 @@ class EventScreen : BaseFragment<EventViewModel, FragmentEventDetailsScreenBindi
 								ButtonLabels.BUY_TICKET.plus(product.displayPrice)
 							if (context?.isFireTV == true) {
 								PurchasingService.getProductData(hashSetOf(product.productCode))
+							} else {
+								homeViewModel.purchaseAction.postValue(PurchaseResponseStatus.NOT_SUPPORTED)
 							}
 						}
 					} else {
@@ -454,7 +533,7 @@ class EventScreen : BaseFragment<EventViewModel, FragmentEventDetailsScreenBindi
 				eventStreamResponse.response?.let { eventStreamData ->
 					eventStreamData.data?.let { eventDetails ->
 						isEventPurchased = true
-						setEventDetails(eventDetails)
+						fetchRecommendedContent(eventDetails)
 					} ?: fetchEventDetails()
 				} ?: fetchEventDetails()
 			}
@@ -471,9 +550,29 @@ class EventScreen : BaseFragment<EventViewModel, FragmentEventDetailsScreenBindi
 			) {
 				eventResponse.response?.let { eventStreamData ->
 					eventStreamData.data?.let { eventDetails ->
-						setEventDetails(eventDetails)
+						fetchRecommendedContent(eventDetails)
 					} ?: helper.goBack()
 				} ?: helper.goBack()
+			}
+		}
+	}
+
+	private fun fetchRecommendedContent(eventDetails: Entities) {
+		recommendedRailData = arrayListOf()
+		recommendedRailList = arrayListOf()
+		viewModel.fetchRecommendedContent().observe(viewLifecycleOwner) { recommendedContent ->
+			fetch(
+				recommendedContent,
+				isLoaderEnabled = false,
+				canUserAccessScreen = true,
+				shouldBeInBackground = true,
+			) {
+				recommendedContent.response?.let { recommendedRailResponse ->
+					if (recommendedRailResponse.railData.isNotEmpty()) {
+						recommendedRailData = recommendedRailResponse.railData
+					}
+				}
+				setEventDetails(eventDetails)
 			}
 		}
 	}
@@ -508,11 +607,18 @@ class EventScreen : BaseFragment<EventViewModel, FragmentEventDetailsScreenBindi
 		binding.primaryLabel.text = primaryLabelText.also { label ->
 			binding.primaryLabel.isSelected = label == ButtonLabels.UNAVAILABLE
 		}
-		binding.primary.alpha = 1.0f
-		binding.myShows.visibility = if (AppPreferences.get(
+		binding.primary.visibility = if (AppPreferences.get(
 				AppConstants.userSubscriptionStatus, "none"
-			) != "none"
-		) View.VISIBLE else View.GONE
+			) == "none" && primaryLabelText == ButtonLabels.UNAVAILABLE && eventDetails.access.containsAll(arrayListOf("veeps_plus"))
+		) View.GONE else View.VISIBLE
+		binding.primary.alpha = 1.0f
+		binding.myShows.visibility = View.VISIBLE
+		binding.subscribe.alpha = 1.0f
+		binding.subscribeLabel.text = getString(
+			R.string.free_for_subscriber
+		)
+		binding.subscribe.visibility = View.GONE
+
 		setupMyShows(isAdded = homeViewModel.watchlistIds.contains(eventDetails.id))
 
 		val currentDate = DateTime.now()
@@ -586,9 +692,10 @@ class EventScreen : BaseFragment<EventViewModel, FragmentEventDetailsScreenBindi
 		}
 		binding.darkBackground.visibility = View.GONE
 		binding.carousel.visibility = View.VISIBLE
-		binding.primary.requestFocus()
+		if (binding.primary.visibility == View.VISIBLE) binding.primary.requestFocus() else binding.myShows.requestFocus()
 		binding.logo.isFocusable = false
 		binding.logo.isFocusableInTouchMode = false
+		homeViewModel.purchaseAction.postValue(PurchaseResponseStatus.NONE)
 	}
 
 	private fun setupRails() {
@@ -633,6 +740,19 @@ class EventScreen : BaseFragment<EventViewModel, FragmentEventDetailsScreenBindi
 			)
 			rail.add(venueRail)
 		}
+
+		if (recommendedRailData.isNotEmpty()) {
+			recommendedRailData.let { recommendedData ->
+				val railData = recommendedData.first()
+				val recommendedRail = RailData(
+					name = railData.name,
+					entities = railData.entities,
+					cardType = CardTypes.PORTRAIT,
+					entitiesType = EntityTypes.EVENT
+				)
+				recommendedRailList.add(recommendedRail)
+			}
+		}
 		if (rail.none { it.entities.isNotEmpty() }) {
 			binding.listing.visibility = View.GONE
 		} else {
@@ -653,12 +773,29 @@ class EventScreen : BaseFragment<EventViewModel, FragmentEventDetailsScreenBindi
 			}
 			binding.listing.visibility = View.VISIBLE
 		}
+		if (recommendedRailList.none { it.entities.isNotEmpty() }) {
+			binding.recommendationListing.visibility = View.GONE
+		} else {
+			binding.recommendationListing.apply {
+				layoutParams.height = context.resources.getDimensionPixelSize(R.dimen.row_height_rail)
+				itemAnimator = null
+				setNumColumns(1)
+				setHasFixedSize(true)
+				windowAlignment = BaseGridView.WINDOW_ALIGN_HIGH_EDGE
+				windowAlignmentOffsetPercent = 0f
+				isItemAlignmentOffsetWithPadding = true
+				itemAlignmentOffsetPercent = 0f
+				adapter = ContentRailsAdapter(rails = recommendedRailList, helper, Screens.EVENT, action, true)
+				onFlingListener = PagerSnapHelper()
+			}
+			binding.recommendationListing.visibility = View.VISIBLE
+		}
 	}
 
 	private fun fetchUserStats() {
 		val userStatsAPIURL = AppPreferences.get(
 			AppConstants.userBeaconBaseURL, DEFAULT.EMPTY_STRING
-		) + APIConstants.fetchUserStats
+		) + APIConstants.FETCH_USER_STATS
 		AppPreferences.set(
 			AppConstants.generatedJWT, AppUtil.generateJWT(eventIds = viewModel.eventId)
 		)
@@ -675,7 +812,7 @@ class EventScreen : BaseFragment<EventViewModel, FragmentEventDetailsScreenBindi
 							val stats =
 								userStatsResponse.userStats.filter { it.eventId == viewModel.eventId }
 							if (stats.size == 1) {
-								val currentStat = (stats[0].cursor / stats[0].duration) * 100
+								val currentStat = (stats[0].cursor / stats[0].duration)
 								if (currentStat < 95 && currentStat > 0) {
 									binding.primaryLabel.text = ButtonLabels.RESUME
 									binding.resumeProgress.visibility = View.VISIBLE
@@ -712,6 +849,16 @@ class EventScreen : BaseFragment<EventViewModel, FragmentEventDetailsScreenBindi
 								ContextCompat.getColor(
 									context,
 									if ((binding.primary.isFocused).or(binding.primary.hasFocus())) R.color.dark_black else R.color.white
+								)
+							)
+						}
+					}
+					context?.let { context ->
+						binding.subscribeLabel.compoundDrawables.forEach { drawable ->
+							drawable?.setTint(
+								ContextCompat.getColor(
+									context,
+									if ((binding.subscribe.isFocused).or(binding.subscribe.hasFocus())) R.color.dark_black else R.color.white
 								)
 							)
 						}
@@ -783,7 +930,7 @@ class EventScreen : BaseFragment<EventViewModel, FragmentEventDetailsScreenBindi
 		viewModel.clearAllReservations().observe(viewLifecycleOwner) { clearAllReservations ->
 			fetch(
 				clearAllReservations,
-				isLoaderEnabled = true,
+				isLoaderEnabled = false,
 				canUserAccessScreen = true,
 				shouldBeInBackground = true
 			) {
@@ -797,18 +944,19 @@ class EventScreen : BaseFragment<EventViewModel, FragmentEventDetailsScreenBindi
 			.observe(viewLifecycleOwner) { setNewReservation ->
 				fetch(
 					setNewReservation,
-					isLoaderEnabled = true,
+					isLoaderEnabled = false,
 					canUserAccessScreen = true,
 					shouldBeInBackground = true
 				) {
 					setNewReservation.response?.let {
 						it.data?.let { reservation ->
-							homeViewModel.reservedId = reservation.id
+							AppPreferences.set(AppConstants.reservedId, reservation.id)
 							generateNewOrder()
+						} ?: run {
+							homeViewModel.purchaseAction.postValue(PurchaseResponseStatus.FAILED)
 						}
 					} ?: run {
-						binding.paymentLoader.visibility = View.GONE
-
+						homeViewModel.purchaseAction.postValue(PurchaseResponseStatus.FAILED)
 					}
 				}
 			}
@@ -818,20 +966,22 @@ class EventScreen : BaseFragment<EventViewModel, FragmentEventDetailsScreenBindi
 		viewModel.generateNewOrder().observe(viewLifecycleOwner) { generateNewOrder ->
 			fetch(
 				generateNewOrder,
-				isLoaderEnabled = true,
+				isLoaderEnabled = false,
 				canUserAccessScreen = true,
 				shouldBeInBackground = true
 			) {
 				generateNewOrder.response?.let {
 					it.data?.let { order ->
-						homeViewModel.orderId = order.id
+						AppPreferences.set(AppConstants.orderId, order.id)
 						if (context?.isFireTV == true) {
-							PurchasingService.purchase(product.productCode)
+							val requestId = PurchasingService.purchase(product.productCode)
+							AppPreferences.set(AppConstants.SKUId, product.productCode)
+							AppPreferences.set(AppConstants.requestId, requestId.toString())
 						} else {
-							binding.paymentLoader.visibility = View.GONE
+							homeViewModel.purchaseAction.postValue(PurchaseResponseStatus.NOT_SUPPORTED)
 						}
-					} ?: run { binding.paymentLoader.visibility = View.GONE }
-				} ?: run { binding.paymentLoader.visibility = View.GONE }
+					} ?: run { homeViewModel.purchaseAction.postValue(PurchaseResponseStatus.FAILED) }
+				} ?: run { homeViewModel.purchaseAction.postValue(PurchaseResponseStatus.FAILED) }
 			}
 		}
 	}
@@ -839,23 +989,30 @@ class EventScreen : BaseFragment<EventViewModel, FragmentEventDetailsScreenBindi
 	private fun createOrder() {
 		viewModel.createOrder(
 			hashMapOf(
-				"order_id" to homeViewModel.orderId,
-				"payment_id" to homeViewModel.receiptId,
+				"order_id" to AppPreferences.get(AppConstants.orderId, DEFAULT.EMPTY_STRING).toString(),
+				"payment_id" to AppPreferences.get(AppConstants.receiptId, DEFAULT.EMPTY_STRING).toString(),
 				"vendor" to "fire_tv",
 			)
 		).observe(viewLifecycleOwner) { createOrder ->
 			fetch(
 				createOrder,
-				isLoaderEnabled = true,
+				isLoaderEnabled = false,
 				canUserAccessScreen = true,
 				shouldBeInBackground = true
 			) {
 				createOrder.response?.let {
 					it.data?.let {
 						fetchEventStreamDetails()
-						binding.paymentLoader.visibility = View.GONE
-					} ?: run { binding.paymentLoader.visibility = View.GONE }
-				} ?: run { binding.paymentLoader.visibility = View.GONE }
+						PurchasingService.notifyFulfillment(AppPreferences.get(AppConstants.receiptId, DEFAULT.EMPTY_STRING).toString(), FulfillmentResult.FULFILLED)
+						if (homeViewModel.purchaseAction.value == PurchaseResponseStatus.SUCCESS) showToast(getString(R.string.payment_success))
+					} ?: run {
+						PurchasingService.notifyFulfillment(AppPreferences.get(AppConstants.receiptId, DEFAULT.EMPTY_STRING).toString(), FulfillmentResult.UNAVAILABLE)
+						homeViewModel.purchaseAction.postValue(if (homeViewModel.purchaseAction.value == PurchaseResponseStatus.SUCCESS_WITH_PENDING_PURCHASE) PurchaseResponseStatus.NONE else PurchaseResponseStatus.FAILED)
+					}
+				} ?: run {
+					PurchasingService.notifyFulfillment(AppPreferences.get(AppConstants.receiptId, DEFAULT.EMPTY_STRING).toString(), FulfillmentResult.UNAVAILABLE)
+					homeViewModel.purchaseAction.postValue(if (homeViewModel.purchaseAction.value == PurchaseResponseStatus.SUCCESS_WITH_PENDING_PURCHASE) PurchaseResponseStatus.NONE else PurchaseResponseStatus.FAILED)
+				}
 			}
 		}
 	}
@@ -863,11 +1020,20 @@ class EventScreen : BaseFragment<EventViewModel, FragmentEventDetailsScreenBindi
 	fun onPrimaryClicked(tag: Any?) {
 		when (tag) {
 			ButtonLabels.BUY_TICKET -> {
-				binding.paymentLoader.visibility = View.VISIBLE
-				clearAllReservations()
+				if (context?.isFireTV == true) {
+					if (!homeViewModel.isPaymentInProgress) {
+						homeViewModel.isPaymentInProgress = true
+						homeViewModel.isSubscription = false
+						binding.paymentLoader.visibility = View.VISIBLE
+						clearAllReservations()
+					}
+				} else {
+					homeViewModel.purchaseAction.postValue(PurchaseResponseStatus.NOT_SUPPORTED)
+				}
 			}
 
 			ButtonLabels.PLAY -> {
+				releaseVideoPlayer()
 				helper.goToVideoPlayer(viewModel.eventId)
 			}
 
@@ -883,7 +1049,11 @@ class EventScreen : BaseFragment<EventViewModel, FragmentEventDetailsScreenBindi
 					eventDetails.eventName?.ifBlank { DEFAULT.EMPTY_STRING } ?: DEFAULT.EMPTY_STRING
 				val streamStartsAt = eventDetails.eventStreamStartsAt ?: ""
 				val doorOpensAt = eventDetails.eventDoorsAt ?: ""
-				helper.goToWaitingRoom(eventId, eventLogo, eventTitle, doorOpensAt, streamStartsAt)
+				if (AppUtil.isEventStarted(streamStartsAt)) {
+					helper.goToVideoPlayer(viewModel.eventId)
+				} else {
+					helper.goToWaitingRoom(eventId, eventLogo, eventTitle, doorOpensAt, streamStartsAt)
+				}
 			}
 
 			ButtonLabels.CLAIM_FREE_TICKET -> {

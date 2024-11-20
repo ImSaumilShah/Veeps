@@ -1,0 +1,114 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:layout_margin="8dp">
+
+    <RelativeLayout
+        android:id="@+id/planContainer"
+        android:layout_width="260dp"
+        android:layout_height="wrap_content"
+        android:background="@drawable/plan_selector"
+        android:focusable="true"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent">
+
+        <TextView
+            android:id="@+id/planTitle"
+            fontPath="fonts/SaansMedium.ttf"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/dp15"
+            android:gravity="center_horizontal"
+            android:text="Monthly"
+            android:textColor="@color/white"
+            android:textSize="@dimen/sp16"
+            tools:ignore="MissingPrefix" />
+
+        <LinearLayout
+            android:id="@+id/PriceLayout"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_below="@+id/planTitle"
+            android:layout_marginTop="@dimen/dp10"
+            android:gravity="center">
+
+            <TextView
+                android:id="@+id/currency"
+                fontPath="fonts/SaansMedium.ttf"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="@color/white"
+                android:textSize="@dimen/sp50"
+                tools:ignore="MissingPrefix" />
+
+            <TextView
+                android:id="@+id/planPrice"
+                fontPath="fonts/SaansMedium.ttf"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:gravity="center_horizontal"
+                android:textColor="@color/white"
+                android:textSize="@dimen/sp50"
+                android:textStyle="bold"
+                tools:ignore="MissingPrefix" />
+
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_below="@+id/PriceLayout"
+            android:layout_marginTop="@dimen/dp15"
+            android:layout_marginBottom="@dimen/dp20"
+            android:gravity="center">
+
+            <TextView
+                android:id="@+id/select_label"
+                fontPath="fonts/SaansMedium.ttf"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:background="@drawable/plan_selected"
+                android:gravity="center"
+                android:includeFontPadding="false"
+                android:lines="1"
+                android:paddingLeft="@dimen/dp10"
+                android:paddingTop="@dimen/dp4"
+                android:paddingRight="@dimen/dp10"
+                android:paddingBottom="@dimen/dp4"
+                android:text="Select Plan"
+                android:textAllCaps="false"
+                android:textColor="@color/black"
+                android:textSize="@dimen/sp16"
+                android:visibility="gone"
+                tools:ignore="MissingPrefix" />
+
+            <TextView
+                android:id="@+id/unselect_label"
+                fontPath="fonts/SaansMedium.ttf"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:background="@drawable/plan_unselected"
+                android:gravity="center"
+                android:includeFontPadding="false"
+                android:lines="1"
+                android:paddingLeft="@dimen/dp10"
+                android:paddingTop="@dimen/dp4"
+                android:paddingRight="@dimen/dp10"
+                android:paddingBottom="@dimen/dp4"
+                android:text="Select Plan"
+                android:textAllCaps="false"
+                android:textColor="@color/white"
+                android:textSize="@dimen/sp16"
+                tools:ignore="MissingPrefix" />
+
+        </LinearLayout>
+
+
+    </RelativeLayout>
+
+</androidx.constraintlayout.widget.ConstraintLayout>
